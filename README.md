@@ -34,7 +34,7 @@ A Rust REST API server for tracking fuel costs with email/password authenticatio
    cargo run
    ```
 
-The server will start on `http://localhost:3001`
+The server will start on `http://localhost:3002`
 
 **Note**: The SQLite database file (`fuel_cost.db`) will be created automatically on first run.
 
@@ -226,7 +226,7 @@ The database uses a simplified schema with JSON storage:
 ## Testing with Postman
 
 1. Import the `Fuel_Cost_API.postman_collection.json` file into Postman
-2. Set the `base_url` variable to `http://localhost:3001`
+2. Set the `base_url` variable to `http://localhost:3002`
 3. Use the collection to test all endpoints
 
 ### Quick Test Flow:
@@ -267,7 +267,7 @@ cargo run
 ## Configuration
 
 - **Database**: SQLite file (`fuel_cost.db`) created automatically
-- **Server Port**: 3001 (configurable in `main.rs`)
+- **Server Port**: 3002 (configurable in `main.rs`)
 - **CORS**: Permissive (allows all origins)
 
 ## Troubleshooting
@@ -286,7 +286,7 @@ cargo run
 
 ### Testing Issues
 - **Error**: Connection refused
-  - **Solution**: Ensure the server is running on `http://localhost:3001`
+  - **Solution**: Ensure the server is running on `http://localhost:3002`
 
 ### API Error Messages
 Common error responses and their meanings:

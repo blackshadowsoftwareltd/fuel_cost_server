@@ -270,12 +270,21 @@ pub async fn create_fuel_entries_handler(
         }
     }
 
+    let total_requested = request.entries.len();
     match create_fuel_entries(&pool, &request.user_id, &request.entries).await {
-        Ok(entries) => Ok(Json(json!({
-            "message": format!("Successfully created {} fuel entries", entries.len()),
-            "count": entries.len(),
-            "entries": entries
-        }))),
+        Ok(entries) => {
+            let created_count = entries.len();
+            let duplicates_skipped = total_requested - created_count;
+            
+            Ok(Json(json!({
+                "message": format!("Successfully processed {} entries: {} created, {} duplicates skipped", 
+                                  total_requested, created_count, duplicates_skipped),
+                "total_requested": total_requested,
+                "created_count": created_count,
+                "duplicates_skipped": duplicates_skipped,
+                "entries": entries
+            })))
+        }
         Err(e) => {
             eprintln!("Error creating fuel entries: {}", e);
             

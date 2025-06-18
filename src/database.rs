@@ -117,7 +117,23 @@ pub async fn create_fuel_entries(
     // Use a transaction to ensure all entries are created or none
     let mut tx = pool.begin().await?;
     
+    // Get existing entries for this user to check for duplicates
+    let existing_entries = get_fuel_entries_by_user_tx(&mut tx, user_id).await?;
+    
     for entry_data in entries_data {
+        // Check if this entry already exists (same data, ignoring ID)
+        let is_duplicate = existing_entries.iter().any(|existing| {
+            existing.liters == entry_data.liters
+                && existing.price_per_liter == entry_data.price_per_liter
+                && existing.total_cost == entry_data.total_cost
+                && existing.date_time == entry_data.date_time
+                && existing.odometer_reading == entry_data.odometer_reading
+        });
+        
+        if is_duplicate {
+            continue; // Skip duplicate entry
+        }
+        
         let id = Uuid::new_v4().to_string();
         
         let fuel_entry = FuelEntry {
@@ -162,6 +178,21 @@ pub async fn get_fuel_entries_by_user(pool: &SqlitePool, user_id: &str) -> Resul
 
     // Sort by date_time descending
     entries.sort_by(|a, b| b.date_time.cmp(&a.date_time));
+
+    Ok(entries)
+}
+
+async fn get_fuel_entries_by_user_tx<'a>(tx: &mut sqlx::Transaction<'a, sqlx::Sqlite>, user_id: &str) -> Result<Vec<FuelEntry>> {
+    let entries_db = sqlx::query_as::<_, FuelEntryDB>("SELECT * FROM fuel_entries WHERE user_id = ?")
+        .bind(user_id)
+        .fetch_all(&mut **tx)
+        .await?;
+
+    let mut entries = Vec::new();
+    for entry_db in entries_db {
+        let fuel_entry: FuelEntry = serde_json::from_str(&entry_db.data)?;
+        entries.push(fuel_entry);
+    }
 
     Ok(entries)
 }

@@ -13,8 +13,9 @@ use tracing_subscriber;
 
 use database::{create_database_pool, create_tables};
 use handlers::{
-    create_fuel_entry_handler, create_fuel_entries_handler, delete_fuel_entry_handler, delete_fuel_entries_handler, get_fuel_entries_handler,
-    get_fuel_entry_handler, signin, signup, update_fuel_entry_handler,
+    create_fuel_entries_handler, create_fuel_entry_handler, delete_fuel_entries_handler,
+    delete_fuel_entry_handler, get_fuel_entries_handler, get_fuel_entry_handler, signin, signup,
+    update_fuel_entry_handler,
 };
 
 #[tokio::main]
@@ -36,7 +37,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Fuel entry routes
         .route("/api/fuel-entries", post(create_fuel_entry_handler))
         .route("/api/fuel-entries/bulk", post(create_fuel_entries_handler))
-        .route("/api/fuel-entries/bulk/delete", post(delete_fuel_entries_handler))
+        .route(
+            "/api/fuel-entries/bulk/delete",
+            post(delete_fuel_entries_handler),
+        )
         .route("/api/fuel-entries/:user_id", get(get_fuel_entries_handler))
         .route(
             "/api/fuel-entries/:user_id/:id",
@@ -52,8 +56,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(pool);
 
     // Run the server
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await?;
-    println!("Server running on http://0.0.0.0:3001");
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3002").await?;
+    println!("Server running on http://0.0.0.0:3002");
 
     axum::serve(listener, app).await?;
 

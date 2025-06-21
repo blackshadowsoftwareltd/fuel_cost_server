@@ -27,19 +27,22 @@ This creates `YOUR_SERVER_DOMAIN_URL` pointing to your VPS.
 
 ### Build Your Rust Application
 
-1. Install build tools on Ubuntu VPS:
+1.Install build tools on Ubuntu VPS:
+
 ```bash
 sudo apt update
 sudo apt install build-essential -y
 ```
 
-2. Build your Rust project:
+2.Build your Rust project:
+
 ```bash
 cd /root/servers  # or your project directory
 cargo build --release
 ```
 
-3. Verify the binary exists:
+3.Verify the binary exists:
+
 ```bash
 ls target/release/fuel_cost_server
 ```
@@ -208,7 +211,8 @@ curl http://YOUR_SERVER_DOMAIN_URL/api/fuel-entries/f4038731-fa53-4df7-a56f-769d
 ### Test from Browser
 
 Open your browser and navigate to:
-```
+
+```url
 http://YOUR_SERVER_DOMAIN_URL/api/your-endpoint
 ```
 
@@ -277,7 +281,7 @@ sudo crontab -e
 
 ## 📁 Project Structure
 
-```
+```tree
 /root/servers/
 ├── fuel_cost_server          # Compiled binary
 ├── Cargo.toml               # Rust project config
@@ -305,6 +309,32 @@ sudo systemctl status fuel_cost_server
 curl http://YOUR_SERVER_DOMAIN_URL/api/your-endpoint
 ```
 
+🔄 Updating Your Application (Pull Latest Code & Rebuild)
+When you need to deploy new changes from your repository:
+
+```bash
+bash# 1. Navigate to your project directory
+cd /root/servers
+
+# 2. Stop the running service
+sudo systemctl stop fuel_cost_server
+
+# 3. Pull the latest code from your repository
+git pull origin main  # or your branch name
+
+# 4. Rebuild the project
+cargo build --release
+
+# 5. Restart the service
+sudo systemctl start fuel_cost_server
+
+# 6. Verify the service is running
+sudo systemctl status fuel_cost_server
+
+# 7. Test the updated API
+curl http://YOUR_SERVER_DOMAIN_URL/api/your-endpoint
+```
+
 ## 📝 Notes
 
 - The Rust application runs on port 8880 (localhost only)
@@ -315,7 +345,7 @@ curl http://YOUR_SERVER_DOMAIN_URL/api/your-endpoint
 
 ## 🎯 Architecture Overview
 
-```
+```tree
 Internet → YOUR_SERVER_DOMAIN_URL:80 → Nginx → 127.0.0.1:8880 → Rust API
 ```
 

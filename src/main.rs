@@ -4,7 +4,7 @@ mod handlers;
 mod models;
 
 use axum::{
-    routing::{delete, get, post, put},
+    routing::{get, post},
     Router,
 };
 use tower::ServiceBuilder;
@@ -56,8 +56,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(pool);
 
     // Run the server
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3002").await?;
-    println!("Server running on http://0.0.0.0:3002");
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:8880").await?;
+    println!("Server running on http://127.0.0.1:8880");
 
     axum::serve(listener, app).await?;
 

@@ -453,3 +453,16 @@ pub struct ServiceStatus {
     pub signin: bool,
     pub fuel_entry: bool,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct AdminLoginRequest {
+    pub email: String,
+    pub password: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AdminLoginResponse {
+    pub success: bool,
+    pub token: Option<String>,
+    pub message: String,
+}

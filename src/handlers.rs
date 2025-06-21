@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{StatusCode, HeaderMap},
     response::{Html, Json},
 };
 use serde_json::{json, Value};
@@ -13,7 +13,7 @@ use crate::{
         get_fuel_entry_by_id, update_fuel_entry, delete_fuel_entry, delete_fuel_entries,
         get_dashboard_stats, get_all_users, delete_user_by_id, get_service_status, update_service_status, is_service_enabled,
     },
-    models::{SignupRequest, SigninRequest, AuthResponse, CreateFuelEntryRequest, CreateFuelEntriesRequest, UpdateFuelEntryRequest, DeleteFuelEntriesRequest, AdminActionRequest, ServiceToggleRequest},
+    models::{SignupRequest, SigninRequest, AuthResponse, CreateFuelEntryRequest, CreateFuelEntriesRequest, UpdateFuelEntryRequest, DeleteFuelEntriesRequest, AdminActionRequest, ServiceToggleRequest, AdminLoginRequest, AdminLoginResponse},
 };
 
 pub async fn signup(
@@ -566,8 +566,19 @@ pub async fn get_dashboard_handler(
 }
 
 pub async fn get_all_users_handler(
+    headers: HeaderMap,
     State(pool): State<SqlitePool>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check admin authentication
+    if !verify_admin_token(&headers) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({
+                "error": "Unauthorized",
+                "details": "Admin authentication required"
+            }))
+        ));
+    }
     match get_all_users(&pool).await {
         Ok(users) => {
             let safe_users: Vec<_> = users.into_iter().map(|user| json!({
@@ -591,9 +602,20 @@ pub async fn get_all_users_handler(
 }
 
 pub async fn admin_action_handler(
+    headers: HeaderMap,
     State(pool): State<SqlitePool>,
     Json(request): Json<AdminActionRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check admin authentication
+    if !verify_admin_token(&headers) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({
+                "error": "Unauthorized",
+                "details": "Admin authentication required"
+            }))
+        ));
+    }
     match request.action.as_str() {
         "delete_user" => {
             if let Some(user_id) = request.user_id {
@@ -680,9 +702,81 @@ pub async fn serve_dashboard() -> Html<&'static str> {
     Html(include_str!("../index.html"))
 }
 
+pub async fn admin_login_handler(
+    Json(request): Json<AdminLoginRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Hardcoded admin credentials
+    const ADMIN_EMAIL: &str = "me.remon.ahammad@bss.io";
+    const ADMIN_PASSWORD: &str = "rustybustyrestapideshboard";
+    
+    if request.email == ADMIN_EMAIL && request.password == ADMIN_PASSWORD {
+        // Generate a simple token (in production, use proper JWT)
+        let token = format!("admin_token_{}", chrono::Utc::now().timestamp());
+        
+        Ok(Json(json!(AdminLoginResponse {
+            success: true,
+            token: Some(token),
+            message: "Admin login successful".to_string(),
+        })))
+    } else {
+        Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!(AdminLoginResponse {
+                success: false,
+                token: None,
+                message: "Invalid admin credentials".to_string(),
+            }))
+        ))
+    }
+}
+
+pub async fn admin_verify_handler(
+    headers: axum::http::HeaderMap,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    if let Some(auth_header) = headers.get("authorization") {
+        if let Ok(auth_str) = auth_header.to_str() {
+            if auth_str.starts_with("Bearer admin_token_") {
+                return Ok(Json(json!({
+                    "valid": true,
+                    "message": "Token is valid"
+                })));
+            }
+        }
+    }
+    
+    Err((
+        StatusCode::UNAUTHORIZED,
+        Json(json!({
+            "valid": false,
+            "message": "Invalid or missing token"
+        }))
+    ))
+}
+
+// Helper function to verify admin token
+fn verify_admin_token(headers: &HeaderMap) -> bool {
+    if let Some(auth_header) = headers.get("authorization") {
+        if let Ok(auth_str) = auth_header.to_str() {
+            return auth_str.starts_with("Bearer admin_token_");
+        }
+    }
+    false
+}
+
 pub async fn get_service_status_handler(
+    headers: HeaderMap,
     State(pool): State<SqlitePool>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check admin authentication
+    if !verify_admin_token(&headers) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({
+                "error": "Unauthorized",
+                "details": "Admin authentication required"
+            }))
+        ));
+    }
     match get_service_status(&pool).await {
         Ok(status) => Ok(Json(json!(status))),
         Err(e) => {
@@ -699,9 +793,20 @@ pub async fn get_service_status_handler(
 }
 
 pub async fn toggle_service_handler(
+    headers: HeaderMap,
     State(pool): State<SqlitePool>,
     Json(request): Json<ServiceToggleRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check admin authentication
+    if !verify_admin_token(&headers) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({
+                "error": "Unauthorized",
+                "details": "Admin authentication required"
+            }))
+        ));
+    }
     // Validate service name
     if !matches!(request.service.as_str(), "signin" | "fuel_entry") {
         return Err((

@@ -360,6 +360,96 @@
             display: block;
         }
 
+        /* Login form styles */
+        .login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .login-form {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .login-form h2 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 1.8rem;
+        }
+
+        .login-form .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .login-form label {
+            display: block;
+            margin-bottom: 8px;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+
+        .login-form input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ecf0f1;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .login-form input:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .login-form .login-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+
+        .login-form .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+
+        .login-form .login-btn:disabled {
+            background: #95a5a6;
+            transform: none;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        .login-error {
+            color: #e74c3c;
+            margin-top: 15px;
+            padding: 10px;
+            background: #ffeaea;
+            border-radius: 5px;
+            border: 1px solid #e74c3c;
+        }
+
         @media (max-width: 768px) {
             .dashboard-container {
                 margin: 10px;
@@ -403,10 +493,38 @@
 </head>
 
 <body>
-    <div class="dashboard-container">
+    <!-- Login Form Overlay -->
+    <div id="loginOverlay" class="login-overlay">
+        <div class="login-form">
+            <h2>🔐 Admin Login</h2>
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label for="adminEmail">Email:</label>
+                    <input type="email" id="adminEmail" name="email" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="adminPassword">Password:</label>
+                    <input type="password" id="adminPassword" name="password" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="login-btn" id="loginBtn">
+                    <span id="loginBtnText">Login</span>
+                </button>
+                <div id="loginError" class="login-error" style="display: none;"></div>
+            </form>
+        </div>
+    </div>
+
+    <div class="dashboard-container" id="dashboardContainer" style="display: none;">
         <div class="header">
-            <h1>🚗 Fuel Cost Server Dashboard</h1>
-            <p>Admin Analytics & Management Center</p>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>🚗 Fuel Cost Server Dashboard</h1>
+                    <p>Admin Analytics & Management Center</p>
+                </div>
+                <button class="btn" onclick="handleLogout()" style="background: #e74c3c; border: none;">
+                    🚪 Logout
+                </button>
+            </div>
         </div>
 
         <nav class="nav">
@@ -841,8 +959,112 @@
     </div>
 
     <script>
+        // Authentication state
+        let authToken = localStorage.getItem('adminToken');
+        let isAuthenticated = false;
+
         let dashboardData = null;
         let usersData = null;
+
+        // Authentication functions
+        async function handleLogin(event) {
+            event.preventDefault();
+            
+            const loginBtn = document.getElementById('loginBtn');
+            const loginBtnText = document.getElementById('loginBtnText');
+            const loginError = document.getElementById('loginError');
+            
+            // Get form data
+            const email = document.getElementById('adminEmail').value;
+            const password = document.getElementById('adminPassword').value;
+            
+            // Disable button and show loading
+            loginBtn.disabled = true;
+            loginBtnText.textContent = 'Logging in...';
+            loginError.style.display = 'none';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/admin/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    // Store token and mark as authenticated
+                    authToken = result.token;
+                    localStorage.setItem('adminToken', authToken);
+                    isAuthenticated = true;
+                    
+                    // Hide login form and show dashboard
+                    document.getElementById('loginOverlay').style.display = 'none';
+                    document.getElementById('dashboardContainer').style.display = 'block';
+                    
+                    // Initialize dashboard
+                    initializeDashboard();
+                } else {
+                    showLoginError(result.message || 'Login failed');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showLoginError('Network error. Please try again.');
+            } finally {
+                // Re-enable button
+                loginBtn.disabled = false;
+                loginBtnText.textContent = 'Login';
+            }
+        }
+        
+        async function verifyToken() {
+            if (!authToken) {
+                return false;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/admin/verify`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    return result.valid;
+                }
+                return false;
+            } catch (error) {
+                console.error('Token verification error:', error);
+                return false;
+            }
+        }
+        
+        function handleLogout() {
+            authToken = null;
+            isAuthenticated = false;
+            localStorage.removeItem('adminToken');
+            
+            // Hide dashboard and show login form
+            document.getElementById('dashboardContainer').style.display = 'none';
+            document.getElementById('loginOverlay').style.display = 'flex';
+            
+            // Clear form
+            document.getElementById('loginForm').reset();
+            document.getElementById('loginError').style.display = 'none';
+        }
+        
+        function showLoginError(message) {
+            const loginError = document.getElementById('loginError');
+            loginError.textContent = message;
+            loginError.style.display = 'block';
+        }
+        
+        function getAuthHeaders() {
+            return authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
+        }
 
         // Tab switching
         function showTab(tabName) {
@@ -885,7 +1107,9 @@
         // Load dashboard analytics data
         async function loadDashboardData() {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/dashboard`);
+                const response = await fetch(`${API_BASE_URL}/api/dashboard`, {
+                    headers: getAuthHeaders()
+                });
                 if (!response.ok) throw new Error('Failed to fetch dashboard data');
 
                 dashboardData = await response.json();
@@ -1025,7 +1249,9 @@
         // Load users data
         async function loadUsersData() {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/admin/users`);
+                const response = await fetch(`${API_BASE_URL}/api/admin/users`, {
+                    headers: getAuthHeaders()
+                });
                 if (!response.ok) throw new Error('Failed to fetch users data');
 
                 usersData = await response.json();
@@ -1204,7 +1430,8 @@
                 const response = await fetch(`${API_BASE_URL}/api/admin/action`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders()
                     },
                     body: JSON.stringify(payload)
                 });
@@ -1485,7 +1712,8 @@
                 const response = await fetch(`${API_BASE_URL}/api/admin/service-toggle`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders()
                     },
                     body: JSON.stringify({
                         service: service,
@@ -1530,7 +1758,9 @@
 
         async function loadServiceStatus() {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/admin/service-status`);
+                const response = await fetch(`${API_BASE_URL}/api/admin/service-status`, {
+                    headers: getAuthHeaders()
+                });
                 if (response.ok) {
                     const status = await response.json();
                     serviceStates = status;
@@ -1542,10 +1772,38 @@
             }
         }
 
-        // Initialize dashboard
-        document.addEventListener('DOMContentLoaded', function () {
+        // Initialize dashboard data (called after login)
+        function initializeDashboard() {
             loadDashboardData();
             loadServiceStatus();
+        }
+
+        // Check authentication and initialize page
+        async function initializePage() {
+            if (authToken) {
+                const isValid = await verifyToken();
+                if (isValid) {
+                    isAuthenticated = true;
+                    document.getElementById('loginOverlay').style.display = 'none';
+                    document.getElementById('dashboardContainer').style.display = 'block';
+                    initializeDashboard();
+                } else {
+                    // Token is invalid, remove it and show login
+                    localStorage.removeItem('adminToken');
+                    authToken = null;
+                    document.getElementById('loginOverlay').style.display = 'flex';
+                    document.getElementById('dashboardContainer').style.display = 'none';
+                }
+            } else {
+                // No token, show login form
+                document.getElementById('loginOverlay').style.display = 'flex';
+                document.getElementById('dashboardContainer').style.display = 'none';
+            }
+        }
+
+        // Initialize page on load
+        document.addEventListener('DOMContentLoaded', function () {
+            initializePage();
         });
     </script>
 </body>

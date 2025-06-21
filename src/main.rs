@@ -16,7 +16,7 @@ use handlers::{
     create_fuel_entries_handler, create_fuel_entry_handler, delete_fuel_entries_handler,
     delete_fuel_entry_handler, get_fuel_entries_handler, get_fuel_entry_handler, signin, signup,
     update_fuel_entry_handler, get_dashboard_handler, get_all_users_handler, admin_action_handler,
-    serve_dashboard,
+    serve_dashboard, get_service_status_handler, toggle_service_handler,
 };
 
 #[tokio::main]
@@ -53,6 +53,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/dashboard", get(get_dashboard_handler))
         .route("/api/admin/users", get(get_all_users_handler))
         .route("/api/admin/action", post(admin_action_handler))
+        .route("/api/admin/service-status", get(get_service_status_handler))
+        .route("/api/admin/service-toggle", post(toggle_service_handler))
         // Static files
         .route("/", get(serve_dashboard))
         .route("/dashboard", get(serve_dashboard))

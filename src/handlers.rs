@@ -11,15 +11,32 @@ use crate::{
     database::{
         create_user, get_user_by_email, create_fuel_entry, create_fuel_entries, get_fuel_entries_by_user,
         get_fuel_entry_by_id, update_fuel_entry, delete_fuel_entry, delete_fuel_entries,
-        get_dashboard_stats, get_all_users, delete_user_by_id,
+        get_dashboard_stats, get_all_users, delete_user_by_id, get_service_status, update_service_status, is_service_enabled,
     },
-    models::{SignupRequest, SigninRequest, AuthResponse, CreateFuelEntryRequest, CreateFuelEntriesRequest, UpdateFuelEntryRequest, DeleteFuelEntriesRequest, AdminActionRequest},
+    models::{SignupRequest, SigninRequest, AuthResponse, CreateFuelEntryRequest, CreateFuelEntriesRequest, UpdateFuelEntryRequest, DeleteFuelEntriesRequest, AdminActionRequest, ServiceToggleRequest},
 };
 
 pub async fn signup(
     State(pool): State<SqlitePool>,
     Json(request): Json<SignupRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check if signin service is enabled
+    match is_service_enabled(&pool, "signin").await {
+        Ok(false) => {
+            return Err((
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "error": "Service unavailable",
+                    "details": "Sign-up service is currently disabled"
+                }))
+            ));
+        }
+        Err(e) => {
+            eprintln!("Error checking service status: {}", e);
+        }
+        _ => {}
+    }
+
     // Check if user already exists
     match get_user_by_email(&pool, &request.email).await {
         Ok(Some(_)) => {
@@ -86,6 +103,23 @@ pub async fn signin(
     State(pool): State<SqlitePool>,
     Json(request): Json<SigninRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check if signin service is enabled
+    match is_service_enabled(&pool, "signin").await {
+        Ok(false) => {
+            return Err((
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "error": "Service unavailable",
+                    "details": "Sign-in service is currently disabled"
+                }))
+            ));
+        }
+        Err(e) => {
+            eprintln!("Error checking service status: {}", e);
+        }
+        _ => {}
+    }
+
     // Find user by email
     match get_user_by_email(&pool, &request.email).await {
         Ok(Some(user)) => {
@@ -172,6 +206,23 @@ pub async fn create_fuel_entry_handler(
     State(pool): State<SqlitePool>,
     Json(request): Json<CreateFuelEntryRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check if fuel entry service is enabled
+    match is_service_enabled(&pool, "fuel_entry").await {
+        Ok(false) => {
+            return Err((
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "error": "Service unavailable",
+                    "details": "Fuel entry service is currently disabled"
+                }))
+            ));
+        }
+        Err(e) => {
+            eprintln!("Error checking service status: {}", e);
+        }
+        _ => {}
+    }
+
     // First validate that the user exists
     match sqlx::query("SELECT id FROM users WHERE id = ?")
         .bind(&request.user_id)
@@ -232,6 +283,23 @@ pub async fn create_fuel_entries_handler(
     State(pool): State<SqlitePool>,
     Json(request): Json<CreateFuelEntriesRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check if fuel entry service is enabled
+    match is_service_enabled(&pool, "fuel_entry").await {
+        Ok(false) => {
+            return Err((
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "error": "Service unavailable",
+                    "details": "Fuel entry service is currently disabled"
+                }))
+            ));
+        }
+        Err(e) => {
+            eprintln!("Error checking service status: {}", e);
+        }
+        _ => {}
+    }
+
     // Validate that entries list is not empty
     if request.entries.is_empty() {
         return Err((
@@ -610,4 +678,66 @@ pub async fn admin_action_handler(
 
 pub async fn serve_dashboard() -> Html<&'static str> {
     Html(include_str!("../index.html"))
+}
+
+pub async fn get_service_status_handler(
+    State(pool): State<SqlitePool>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    match get_service_status(&pool).await {
+        Ok(status) => Ok(Json(json!(status))),
+        Err(e) => {
+            eprintln!("Error getting service status: {}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "error": "Failed to get service status",
+                    "details": e.to_string()
+                }))
+            ))
+        }
+    }
+}
+
+pub async fn toggle_service_handler(
+    State(pool): State<SqlitePool>,
+    Json(request): Json<ServiceToggleRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Validate service name
+    if !matches!(request.service.as_str(), "signin" | "fuel_entry") {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": "Invalid service",
+                "details": format!("Unknown service '{}'", request.service)
+            }))
+        ));
+    }
+
+    match update_service_status(&pool, &request.service, request.enabled).await {
+        Ok(true) => {
+            let status_text = if request.enabled { "enabled" } else { "disabled" };
+            Ok(Json(json!({
+                "message": format!("Service '{}' has been {}", request.service, status_text),
+                "service": request.service,
+                "enabled": request.enabled
+            })))
+        }
+        Ok(false) => Err((
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "error": "Service not found",
+                "details": format!("Service '{}' not found", request.service)
+            }))
+        )),
+        Err(e) => {
+            eprintln!("Error toggling service {}: {}", request.service, e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "error": "Failed to toggle service",
+                    "details": e.to_string()
+                }))
+            ))
+        }
+    }
 }

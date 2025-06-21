@@ -434,3 +434,22 @@ pub struct RegionalPrice {
     pub entry_count: i32,
     pub price_rank: i32,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct ServiceToggleRequest {
+    pub service: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct ServiceConfig {
+    pub service_name: String,
+    pub enabled: bool,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ServiceStatus {
+    pub signin: bool,
+    pub fuel_entry: bool,
+}

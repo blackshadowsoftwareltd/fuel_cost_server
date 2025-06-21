@@ -283,6 +283,61 @@
             flex-wrap: wrap;
         }
 
+        .service-controls {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .service-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .service-toggle label {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .toggle-btn {
+            min-width: 60px;
+        }
+
+        .toggle-btn.off {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        }
+
+        .copy-btn {
+            background: #95a5a6;
+            color: white;
+            border: none;
+            padding: 2px 6px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            margin-left: 5px;
+        }
+
+        .copy-btn:hover {
+            background: #7f8c8d;
+        }
+
+        .user-id-cell {
+            position: relative;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+
+        .full-user-id {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: block;
+        }
+
         @media (max-width: 768px) {
             .dashboard-container {
                 margin: 10px;
@@ -371,6 +426,10 @@
                             <h3>Avg Price/Liter</h3>
                             <div class="value" id="avgPrice">$0</div>
                         </div>
+                        <div class="stat-card">
+                            <h3>Average Mileage</h3>
+                            <div class="value" id="avgMileage">0 km/L</div>
+                        </div>
                     </div>
 
                     <div class="charts-grid">
@@ -391,6 +450,7 @@
                                 <thead>
                                     <tr>
                                         <th>Email</th>
+                                        <th>Full User ID</th>
                                         <th>Entries</th>
                                         <th>Total Cost</th>
                                         <th>Total Liters</th>
@@ -697,6 +757,25 @@
             <!-- Admin Actions Tab -->
             <div id="admin" class="tab-content">
                 <div class="admin-section">
+                    <h3>⚙️ Service Controls</h3>
+                    <div class="service-controls">
+                        <div class="service-toggle">
+                            <label for="signinToggle">Sign-in Service:</label>
+                            <button id="signinToggle" class="btn toggle-btn" onclick="toggleService('signin')">
+                                <span id="signinStatus">ON</span>
+                            </button>
+                        </div>
+                        <div class="service-toggle">
+                            <label for="fuelEntryToggle">Fuel Entry Service:</label>
+                            <button id="fuelEntryToggle" class="btn toggle-btn" onclick="toggleService('fuel_entry')">
+                                <span id="fuelEntryStatus">ON</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="serviceResult"></div>
+                </div>
+
+                <div class="admin-section">
                     <h3>🔧 Admin Actions</h3>
                     <div class="action-buttons">
                         <button class="btn" onclick="refreshAllData()">🔄 Refresh All Data</button>
@@ -801,6 +880,10 @@
             document.getElementById('totalCost').textContent = `$${data.total_fuel_cost.toFixed(2)}`;
             document.getElementById('totalLiters').textContent = `${data.total_liters.toFixed(1)}L`;
             document.getElementById('avgPrice').textContent = `$${data.average_price_per_liter.toFixed(2)}`;
+            
+            // Calculate and display average mileage
+            const avgMileage = data.total_liters > 0 ? (data.total_distance || 0) / data.total_liters : 0;
+            document.getElementById('avgMileage').textContent = `${avgMileage.toFixed(2)} km/L`;
 
             // Populate top users table
             const topUsersTable = document.getElementById('topUsersTable');
@@ -809,6 +892,10 @@
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${user.email}</td>
+                    <td class="user-id-cell">
+                        <span class="full-user-id" title="${user.user_id}">${user.user_id}</span>
+                        <button class="copy-btn" onclick="copyToClipboard('${user.user_id}')">Copy</button>
+                    </td>
                     <td>${user.entry_count}</td>
                     <td>$${user.total_cost.toFixed(2)}</td>
                     <td>${user.total_liters.toFixed(1)}L</td>
@@ -827,7 +914,10 @@
                     <td>$${entry.total_cost.toFixed(2)}</td>
                     <td>${entry.liters.toFixed(1)}L</td>
                     <td>$${entry.price_per_liter.toFixed(2)}</td>
-                    <td>${entry.user_id.substring(0, 8)}...</td>
+                    <td class="user-id-cell">
+                        <span class="full-user-id" title="${entry.user_id}">${entry.user_id}</span>
+                        <button class="copy-btn" onclick="copyToClipboard('${entry.user_id}')">Copy</button>
+                    </td>
                 `;
                 expensiveTable.appendChild(row);
             });
@@ -932,7 +1022,10 @@
                 const createdAt = new Date(user.created_at).toLocaleDateString();
                 row.innerHTML = `
                     <td>${user.email}</td>
-                    <td>${user.id.substring(0, 8)}...</td>
+                    <td class="user-id-cell">
+                        <span class="full-user-id" title="${user.id}">${user.id}</span>
+                        <button class="copy-btn" onclick="copyToClipboard('${user.id}')">Copy</button>
+                    </td>
                     <td>${createdAt}</td>
                     <td>
                         <button class="btn btn-danger" onclick="confirmDeleteUser('${user.id}', '${user.email}')">Delete</button>
@@ -959,7 +1052,10 @@
                     <td>$${entry.total_cost.toFixed(2)}</td>
                     <td>${entry.liters.toFixed(1)}L</td>
                     <td>$${entry.price_per_liter.toFixed(2)}</td>
-                    <td>${entry.user_id.substring(0, 8)}...</td>
+                    <td class="user-id-cell">
+                        <span class="full-user-id" title="${entry.user_id}">${entry.user_id}</span>
+                        <button class="copy-btn" onclick="copyToClipboard('${entry.user_id}')">Copy</button>
+                    </td>
                     <td>
                         <button class="btn btn-danger" onclick="confirmDeleteEntry('${entry.id}', '${entry.user_id}')">Delete</button>
                     </td>
@@ -1340,9 +1436,90 @@
             document.getElementById('priceChange').textContent = `${trends.price_comparisons.price_change_percentage.toFixed(2)}%`;
         }
 
+        // Copy functionality
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                showMessage(`Copied: ${text}`, 'success');
+            }).catch(function(err) {
+                console.error('Failed to copy: ', err);
+                showMessage('Failed to copy to clipboard', 'error');
+            });
+        }
+
+        // Service toggle functionality
+        let serviceStates = {
+            signin: true,
+            fuel_entry: true
+        };
+
+        async function toggleService(service) {
+            try {
+                const newState = !serviceStates[service];
+                
+                const response = await fetch('/api/admin/service-toggle', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        service: service,
+                        enabled: newState
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    serviceStates[service] = newState;
+                    updateServiceUI(service, newState);
+                    showServiceMessage(result.message, 'success');
+                } else {
+                    showServiceMessage(result.error + ': ' + result.details, 'error');
+                }
+            } catch (error) {
+                console.error('Error toggling service:', error);
+                showServiceMessage('Error toggling service: ' + error.message, 'error');
+            }
+        }
+
+        function updateServiceUI(service, enabled) {
+            const button = document.getElementById(`${service}Toggle`);
+            const status = document.getElementById(`${service}Status`);
+            
+            status.textContent = enabled ? 'ON' : 'OFF';
+            if (enabled) {
+                button.classList.remove('off');
+            } else {
+                button.classList.add('off');
+            }
+        }
+
+        function showServiceMessage(message, type) {
+            const serviceResult = document.getElementById('serviceResult');
+            serviceResult.innerHTML = `<div class="${type}">${message}</div>`;
+            setTimeout(() => {
+                serviceResult.innerHTML = '';
+            }, 5000);
+        }
+
+        async function loadServiceStatus() {
+            try {
+                const response = await fetch('/api/admin/service-status');
+                if (response.ok) {
+                    const status = await response.json();
+                    serviceStates = status;
+                    updateServiceUI('signin', status.signin);
+                    updateServiceUI('fuel_entry', status.fuel_entry);
+                }
+            } catch (error) {
+                console.error('Error loading service status:', error);
+            }
+        }
+
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
             loadDashboardData();
+            loadServiceStatus();
         });
     </script>
 </body>

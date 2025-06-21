@@ -15,7 +15,8 @@ use database::{create_database_pool, create_tables};
 use handlers::{
     create_fuel_entries_handler, create_fuel_entry_handler, delete_fuel_entries_handler,
     delete_fuel_entry_handler, get_fuel_entries_handler, get_fuel_entry_handler, signin, signup,
-    update_fuel_entry_handler,
+    update_fuel_entry_handler, get_dashboard_handler, get_all_users_handler, admin_action_handler,
+    serve_dashboard,
 };
 
 #[tokio::main]
@@ -48,6 +49,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .put(update_fuel_entry_handler)
                 .delete(delete_fuel_entry_handler),
         )
+        // Dashboard routes
+        .route("/api/dashboard", get(get_dashboard_handler))
+        .route("/api/admin/users", get(get_all_users_handler))
+        .route("/api/admin/action", post(admin_action_handler))
+        // Static files
+        .route("/", get(serve_dashboard))
+        .route("/dashboard", get(serve_dashboard))
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())

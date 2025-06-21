@@ -1,0 +1,3 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.29s
+     Running `target/debug/fuel_cost_server`
+Server running on http://127.0.0.1:8880

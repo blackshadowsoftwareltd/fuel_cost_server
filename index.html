@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fuel Cost Server - Admin Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .nav {
+            background: #34495e;
+            padding: 0;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .nav-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 0;
+            flex-wrap: wrap;
+        }
+
+        .nav-btn {
+            background: transparent;
+            border: none;
+            color: white;
+            padding: 12px 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+            white-space: nowrap;
+        }
+
+        .nav-btn:hover, .nav-btn.active {
+            background: rgba(255, 255, 255, 0.1);
+            border-bottom-color: #3498db;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .stat-card .value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-container h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 1.3rem;
+        }
+
+        .data-table {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .data-table h3 {
+            background: #34495e;
+            color: white;
+            padding: 20px;
+            margin: 0;
+            font-size: 1.3rem;
+        }
+
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #2c3e50;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        tbody tr:hover {
+            background: rgba(52, 152, 219, 0.1);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            margin: 2px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        }
+
+        .btn-danger:hover {
+            box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.2rem;
+            color: #7f8c8d;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #bdc3c7;
+            border-radius: 50%;
+            border-top-color: #3498db;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #e74c3c;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .success {
+            background: #27ae60;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .admin-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .admin-section h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 10px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+
+            .header {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .content {
+                padding: 20px;
+            }
+
+            .nav-buttons {
+                flex-direction: column;
+            }
+
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 15px;
+            }
+
+            .stat-card {
+                padding: 20px;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="header">
+            <h1>🚗 Fuel Cost Server Dashboard</h1>
+            <p>Admin Analytics & Management Center</p>
+        </div>
+
+        <nav class="nav">
+            <div class="nav-buttons">
+                <button class="nav-btn active" onclick="showTab('analytics')">📊 Overview</button>
+                <button class="nav-btn" onclick="showTab('efficiency')">⚡ Efficiency</button>
+                <button class="nav-btn" onclick="showTab('behavior')">🔍 User Behavior</button>
+                <button class="nav-btn" onclick="showTab('costs')">💰 Cost Analysis</button>
+                <button class="nav-btn" onclick="showTab('predictions')">🔮 Predictions</button>
+                <button class="nav-btn" onclick="showTab('trends')">📈 Price Trends</button>
+                <button class="nav-btn" onclick="showTab('users')">👥 Users</button>
+                <button class="nav-btn" onclick="showTab('entries')">⛽ Entries</button>
+                <button class="nav-btn" onclick="showTab('admin')">⚙️ Admin</button>
+            </div>
+        </nav>
+
+        <div class="content">
+            <!-- Analytics Tab -->
+            <div id="analytics" class="tab-content active">
+                <div id="analyticsLoading" class="loading">Loading dashboard analytics...</div>
+                <div id="analyticsContent" style="display: none;">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h3>Total Users</h3>
+                            <div class="value" id="totalUsers">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Total Fuel Entries</h3>
+                            <div class="value" id="totalEntries">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Total Fuel Cost</h3>
+                            <div class="value" id="totalCost">$0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Total Liters</h3>
+                            <div class="value" id="totalLiters">0L</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Avg Price/Liter</h3>
+                            <div class="value" id="avgPrice">$0</div>
+                        </div>
+                    </div>
+
+                    <div class="charts-grid">
+                        <div class="chart-container">
+                            <h3>Monthly Fuel Costs</h3>
+                            <canvas id="monthlyChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h3>User Registrations</h3>
+                            <canvas id="registrationChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="data-table">
+                        <h3>Top Users by Entries</h3>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Email</th>
+                                        <th>Entries</th>
+                                        <th>Total Cost</th>
+                                        <th>Total Liters</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="topUsersTable">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="data-table">
+                        <h3>Most Expensive Fuel Entries</h3>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Cost</th>
+                                        <th>Liters</th>
+                                        <th>Price/Liter</th>
+                                        <th>User ID</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="expensiveEntriesTable">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Tab -->
+            <div id="users" class="tab-content">
+                <div id="usersLoading" class="loading">Loading users...</div>
+                <div id="usersContent" style="display: none;">
+                    <div class="data-table">
+                        <h3>All Users</h3>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Email</th>
+                                        <th>User ID</th>
+                                        <th>Created At</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="allUsersTable">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fuel Entries Tab -->
+            <div id="entries" class="tab-content">
+                <div id="entriesLoading" class="loading">Loading recent entries...</div>
+                <div id="entriesContent" style="display: none;">
+                    <div class="data-table">
+                        <h3>Recent Fuel Entries</h3>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Cost</th>
+                                        <th>Liters</th>
+                                        <th>Price/Liter</th>
+                                        <th>User ID</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recentEntriesTable">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Efficiency Analytics Tab -->
+            <div id="efficiency" class="tab-content">
+                <div id="efficiencyLoading" class="loading">Loading efficiency analytics...</div>
+                <div id="efficiencyContent" style="display: none;">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h3>Average Fuel per Entry</h3>
+                            <div class="value" id="avgFuelPerEntry">0L</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Users with Odometer</h3>
+                            <div class="value" id="usersWithOdometer">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Total Distance Tracked</h3>
+                            <div class="value" id="totalDistance">0km</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Fuel per KM</h3>
+                            <div class="value" id="fuelPerKm">0L/km</div>
+                        </div>
+                    </div>
+
+                    <div class="charts-grid">
+                        <div class="chart-container">
+                            <h3>Most Efficient Users</h3>
+                            <canvas id="efficiencyChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h3>Fill-up Patterns</h3>
+                            <canvas id="fillupChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="data-table">
+                        <h3>User Efficiency Rankings</h3>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Email</th>
+                                        <th>Avg Liters/Entry</th>
+                                        <th>Total Entries</th>
+                                        <th>Efficiency Score</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="efficiencyTable">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Behavior Tab -->
+            <div id="behavior" class="tab-content">
+                <div id="behaviorLoading" class="loading">Loading user behavior analytics...</div>
+                <div id="behaviorContent" style="display: none;">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h3>Average Session Entries</h3>
+                            <div class="value" id="avgSessionEntries">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>User Consistency Score</h3>
+                            <div class="value" id="consistencyScore">0%</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Odometer Usage Rate</h3>
+                            <div class="value" id="odometerUsageRate">0%</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>7-Day Retention</h3>
+                            <div class="value" id="retention7Day">0%</div>
+                        </div>
+                    </div>
+
+                    <div class="charts-grid">
+                        <div class="chart-container">
+                            <h3>Weekly Activity Patterns</h3>
+                            <canvas id="weeklyActivityChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h3>User Activity Distribution</h3>
+                            <canvas id="activityDistChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="data-table">
+                        <h3>Most Active Users</h3>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Email</th>
+                                        <th>Entries</th>
+                                        <th>Days Active</th>
+                                        <th>Avg Entries/Day</th>
+                                        <th>Last Activity</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="activityTable">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cost Analysis Tab -->
+            <div id="costs" class="tab-content">
+                <div id="costsLoading" class="loading">Loading cost analytics...</div>
+                <div id="costsContent" style="display: none;">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h3>Low Cost Entries (&lt;$50)</h3>
+                            <div class="value" id="lowCostEntries">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Medium Cost ($50-$150)</h3>
+                            <div class="value" id="mediumCostEntries">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>High Cost (&gt;$150)</h3>
+                            <div class="value" id="highCostEntries">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Average Cost per User</h3>
+                            <div class="value" id="avgCostPerUser">$0</div>
+                        </div>
+                    </div>
+
+                    <div class="charts-grid">
+                        <div class="chart-container">
+                            <h3>Cost Distribution</h3>
+                            <canvas id="costDistChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h3>Top Spenders</h3>
+                            <canvas id="topSpendersChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Predictions Tab -->
+            <div id="predictions" class="tab-content">
+                <div id="predictionsLoading" class="loading">Loading predictive analytics...</div>
+                <div id="predictionsContent" style="display: none;">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h3>Next Month Revenue</h3>
+                            <div class="value" id="nextMonthRevenue">$0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Next Quarter Revenue</h3>
+                            <div class="value" id="nextQuarterRevenue">$0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Annual Projection</h3>
+                            <div class="value" id="annualProjection">$0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Expected Growth Rate</h3>
+                            <div class="value" id="growthRate">0%</div>
+                        </div>
+                    </div>
+
+                    <div class="charts-grid">
+                        <div class="chart-container">
+                            <h3>Price Forecast (6 Months)</h3>
+                            <canvas id="priceForecastChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h3>User Growth Forecast</h3>
+                            <canvas id="userGrowthChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h3>Consumption Forecast</h3>
+                            <canvas id="consumptionForecastChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Price Trends Tab -->
+            <div id="trends" class="tab-content">
+                <div id="trendsLoading" class="loading">Loading price trend analytics...</div>
+                <div id="trendsContent" style="display: none;">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h3>Price Volatility Index</h3>
+                            <div class="value" id="volatilityIndex">0%</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Standard Deviation</h3>
+                            <div class="value" id="priceStdDev">$0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Lowest Price</h3>
+                            <div class="value" id="lowestPrice">$0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Highest Price</h3>
+                            <div class="value" id="highestPrice">$0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Price Change %</h3>
+                            <div class="value" id="priceChange">0%</div>
+                        </div>
+                    </div>
+
+                    <div class="charts-grid">
+                        <div class="chart-container">
+                            <h3>Price Volatility Analysis</h3>
+                            <canvas id="volatilityChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Actions Tab -->
+            <div id="admin" class="tab-content">
+                <div class="admin-section">
+                    <h3>🔧 Admin Actions</h3>
+                    <div class="action-buttons">
+                        <button class="btn" onclick="refreshAllData()">🔄 Refresh All Data</button>
+                        <button class="btn" onclick="exportData()">📥 Export Data</button>
+                        <button class="btn btn-danger" onclick="showDangerActions()">⚠️ Danger Zone</button>
+                    </div>
+                    <div id="actionResult"></div>
+                    
+                    <div id="dangerZone" style="display: none;">
+                        <div class="admin-section" style="border: 2px solid #e74c3c;">
+                            <h3 style="color: #e74c3c;">⚠️ Danger Zone - Use with Caution</h3>
+                            <p style="color: #7f8c8d; margin-bottom: 20px;">These actions cannot be undone!</p>
+                            <div class="action-buttons">
+                                <button class="btn btn-danger" onclick="showDeleteUserForm()">🗑️ Delete User</button>
+                                <button class="btn btn-danger" onclick="showDeleteEntryForm()">🗑️ Delete Entry</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="deleteUserForm" style="display: none;" class="admin-section">
+                        <h3>Delete User</h3>
+                        <input type="text" id="deleteUserId" placeholder="Enter User ID" style="width: 300px; padding: 10px; margin-right: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                        <button class="btn btn-danger" onclick="deleteUser()">Delete User</button>
+                        <button class="btn" onclick="hideDeleteUserForm()">Cancel</button>
+                    </div>
+
+                    <div id="deleteEntryForm" style="display: none;" class="admin-section">
+                        <h3>Delete Fuel Entry</h3>
+                        <input type="text" id="deleteEntryUserId" placeholder="Enter User ID" style="width: 200px; padding: 10px; margin-right: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                        <input type="text" id="deleteEntryId" placeholder="Enter Entry ID" style="width: 200px; padding: 10px; margin-right: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                        <button class="btn btn-danger" onclick="deleteEntry()">Delete Entry</button>
+                        <button class="btn" onclick="hideDeleteEntryForm()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let dashboardData = null;
+        let usersData = null;
+
+        // Tab switching
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all nav buttons
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            
+            // Add active class to clicked button
+            event.target.classList.add('active');
+            
+            // Load data for the tab if needed
+            if (tabName === 'analytics' && !dashboardData) {
+                loadDashboardData();
+            } else if (tabName === 'efficiency' && dashboardData) {
+                showEfficiencyAnalytics();
+            } else if (tabName === 'behavior' && dashboardData) {
+                showBehaviorAnalytics();
+            } else if (tabName === 'costs' && dashboardData) {
+                showCostAnalytics();
+            } else if (tabName === 'predictions' && dashboardData) {
+                showPredictiveAnalytics();
+            } else if (tabName === 'trends' && dashboardData) {
+                showPriceTrends();
+            } else if (tabName === 'users' && !usersData) {
+                loadUsersData();
+            } else if (tabName === 'entries' && dashboardData) {
+                showRecentEntries();
+            }
+        }
+
+        // Load dashboard analytics data
+        async function loadDashboardData() {
+            try {
+                const response = await fetch('/api/dashboard');
+                if (!response.ok) throw new Error('Failed to fetch dashboard data');
+                
+                dashboardData = await response.json();
+                displayDashboardData(dashboardData);
+                
+                document.getElementById('analyticsLoading').style.display = 'none';
+                document.getElementById('analyticsContent').style.display = 'block';
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                document.getElementById('analyticsLoading').innerHTML = `<div class="error">Error loading data: ${error.message}</div>`;
+            }
+        }
+
+        // Display dashboard data
+        function displayDashboardData(data) {
+            document.getElementById('totalUsers').textContent = data.total_users;
+            document.getElementById('totalEntries').textContent = data.total_fuel_entries;
+            document.getElementById('totalCost').textContent = `$${data.total_fuel_cost.toFixed(2)}`;
+            document.getElementById('totalLiters').textContent = `${data.total_liters.toFixed(1)}L`;
+            document.getElementById('avgPrice').textContent = `$${data.average_price_per_liter.toFixed(2)}`;
+
+            // Populate top users table
+            const topUsersTable = document.getElementById('topUsersTable');
+            topUsersTable.innerHTML = '';
+            data.users_with_most_entries.forEach(user => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${user.email}</td>
+                    <td>${user.entry_count}</td>
+                    <td>$${user.total_cost.toFixed(2)}</td>
+                    <td>${user.total_liters.toFixed(1)}L</td>
+                `;
+                topUsersTable.appendChild(row);
+            });
+
+            // Populate expensive entries table
+            const expensiveTable = document.getElementById('expensiveEntriesTable');
+            expensiveTable.innerHTML = '';
+            data.most_expensive_entries.forEach(entry => {
+                const row = document.createElement('tr');
+                const date = new Date(entry.date_time).toLocaleDateString();
+                row.innerHTML = `
+                    <td>${date}</td>
+                    <td>$${entry.total_cost.toFixed(2)}</td>
+                    <td>${entry.liters.toFixed(1)}L</td>
+                    <td>$${entry.price_per_liter.toFixed(2)}</td>
+                    <td>${entry.user_id.substring(0, 8)}...</td>
+                `;
+                expensiveTable.appendChild(row);
+            });
+
+            // Create charts
+            createCharts(data);
+        }
+
+        // Create charts
+        function createCharts(data) {
+            // Monthly costs chart
+            const monthlyCtx = document.getElementById('monthlyChart').getContext('2d');
+            new Chart(monthlyCtx, {
+                type: 'line',
+                data: {
+                    labels: data.monthly_stats.map(stat => `${stat.month} ${stat.year}`).reverse(),
+                    datasets: [{
+                        label: 'Monthly Fuel Cost ($)',
+                        data: data.monthly_stats.map(stat => stat.total_cost).reverse(),
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: true
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toFixed(0);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // User registrations chart
+            const regCtx = document.getElementById('registrationChart').getContext('2d');
+            new Chart(regCtx, {
+                type: 'bar',
+                data: {
+                    labels: data.user_registration_stats.map(stat => `${stat.month} ${stat.year}`).reverse(),
+                    datasets: [{
+                        label: 'New Users',
+                        data: data.user_registration_stats.map(stat => stat.new_users).reverse(),
+                        backgroundColor: '#27ae60',
+                        borderColor: '#2ecc71',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: true
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Load users data
+        async function loadUsersData() {
+            try {
+                const response = await fetch('/api/admin/users');
+                if (!response.ok) throw new Error('Failed to fetch users data');
+                
+                usersData = await response.json();
+                displayUsersData(usersData);
+                
+                document.getElementById('usersLoading').style.display = 'none';
+                document.getElementById('usersContent').style.display = 'block';
+            } catch (error) {
+                console.error('Error loading users data:', error);
+                document.getElementById('usersLoading').innerHTML = `<div class="error">Error loading users: ${error.message}</div>`;
+            }
+        }
+
+        // Display users data
+        function displayUsersData(users) {
+            const allUsersTable = document.getElementById('allUsersTable');
+            allUsersTable.innerHTML = '';
+            users.forEach(user => {
+                const row = document.createElement('tr');
+                const createdAt = new Date(user.created_at).toLocaleDateString();
+                row.innerHTML = `
+                    <td>${user.email}</td>
+                    <td>${user.id.substring(0, 8)}...</td>
+                    <td>${createdAt}</td>
+                    <td>
+                        <button class="btn btn-danger" onclick="confirmDeleteUser('${user.id}', '${user.email}')">Delete</button>
+                    </td>
+                `;
+                allUsersTable.appendChild(row);
+            });
+        }
+
+        // Show recent entries
+        function showRecentEntries() {
+            if (!dashboardData) return;
+            
+            document.getElementById('entriesLoading').style.display = 'none';
+            document.getElementById('entriesContent').style.display = 'block';
+
+            const recentTable = document.getElementById('recentEntriesTable');
+            recentTable.innerHTML = '';
+            dashboardData.recent_entries.forEach(entry => {
+                const row = document.createElement('tr');
+                const date = new Date(entry.date_time).toLocaleDateString();
+                row.innerHTML = `
+                    <td>${date}</td>
+                    <td>$${entry.total_cost.toFixed(2)}</td>
+                    <td>${entry.liters.toFixed(1)}L</td>
+                    <td>$${entry.price_per_liter.toFixed(2)}</td>
+                    <td>${entry.user_id.substring(0, 8)}...</td>
+                    <td>
+                        <button class="btn btn-danger" onclick="confirmDeleteEntry('${entry.id}', '${entry.user_id}')">Delete</button>
+                    </td>
+                `;
+                recentTable.appendChild(row);
+            });
+        }
+
+        // Admin actions
+        function refreshAllData() {
+            dashboardData = null;
+            usersData = null;
+            
+            if (document.getElementById('analytics').classList.contains('active')) {
+                document.getElementById('analyticsContent').style.display = 'none';
+                document.getElementById('analyticsLoading').style.display = 'block';
+                loadDashboardData();
+            }
+            
+            if (document.getElementById('users').classList.contains('active')) {
+                document.getElementById('usersContent').style.display = 'none';
+                document.getElementById('usersLoading').style.display = 'block';
+                loadUsersData();
+            }
+
+            showMessage('Data refreshed successfully!', 'success');
+        }
+
+        function exportData() {
+            if (dashboardData) {
+                const dataStr = JSON.stringify(dashboardData, null, 2);
+                const dataBlob = new Blob([dataStr], {type: 'application/json'});
+                const url = URL.createObjectURL(dataBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'dashboard-data.json';
+                link.click();
+                showMessage('Data exported successfully!', 'success');
+            } else {
+                showMessage('No data to export. Please load the analytics first.', 'error');
+            }
+        }
+
+        function showDangerActions() {
+            const dangerZone = document.getElementById('dangerZone');
+            dangerZone.style.display = dangerZone.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function showDeleteUserForm() {
+            document.getElementById('deleteUserForm').style.display = 'block';
+        }
+
+        function hideDeleteUserForm() {
+            document.getElementById('deleteUserForm').style.display = 'none';
+            document.getElementById('deleteUserId').value = '';
+        }
+
+        function showDeleteEntryForm() {
+            document.getElementById('deleteEntryForm').style.display = 'block';
+        }
+
+        function hideDeleteEntryForm() {
+            document.getElementById('deleteEntryForm').style.display = 'none';
+            document.getElementById('deleteEntryUserId').value = '';
+            document.getElementById('deleteEntryId').value = '';
+        }
+
+        function confirmDeleteUser(userId, email) {
+            if (confirm(`Are you sure you want to delete user "${email}"? This will also delete all their fuel entries. This action cannot be undone.`)) {
+                performAdminAction('delete_user', userId);
+            }
+        }
+
+        function confirmDeleteEntry(entryId, userId) {
+            if (confirm(`Are you sure you want to delete this fuel entry? This action cannot be undone.`)) {
+                performAdminAction('delete_entry', userId, entryId);
+            }
+        }
+
+        function deleteUser() {
+            const userId = document.getElementById('deleteUserId').value.trim();
+            if (!userId) {
+                showMessage('Please enter a user ID', 'error');
+                return;
+            }
+            
+            if (confirm(`Are you sure you want to delete user with ID "${userId}"? This will also delete all their fuel entries. This action cannot be undone.`)) {
+                performAdminAction('delete_user', userId);
+                hideDeleteUserForm();
+            }
+        }
+
+        function deleteEntry() {
+            const userId = document.getElementById('deleteEntryUserId').value.trim();
+            const entryId = document.getElementById('deleteEntryId').value.trim();
+            
+            if (!userId || !entryId) {
+                showMessage('Please enter both User ID and Entry ID', 'error');
+                return;
+            }
+            
+            if (confirm(`Are you sure you want to delete this fuel entry? This action cannot be undone.`)) {
+                performAdminAction('delete_entry', userId, entryId);
+                hideDeleteEntryForm();
+            }
+        }
+
+        // Perform admin action
+        async function performAdminAction(action, userId, entryId = null) {
+            try {
+                const payload = {
+                    action: action,
+                    user_id: userId
+                };
+                
+                if (entryId) {
+                    payload.entry_id = entryId;
+                }
+
+                const response = await fetch('/api/admin/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showMessage(result.message, 'success');
+                    // Refresh data after successful action
+                    setTimeout(() => {
+                        refreshAllData();
+                    }, 1000);
+                } else {
+                    showMessage(result.error + ': ' + result.details, 'error');
+                }
+            } catch (error) {
+                console.error('Error performing admin action:', error);
+                showMessage('Error performing action: ' + error.message, 'error');
+            }
+        }
+
+        // Show message
+        function showMessage(message, type) {
+            const actionResult = document.getElementById('actionResult');
+            actionResult.innerHTML = `<div class="${type}">${message}</div>`;
+            setTimeout(() => {
+                actionResult.innerHTML = '';
+            }, 5000);
+        }
+
+        // Show efficiency analytics
+        function showEfficiencyAnalytics() {
+            if (!dashboardData || !dashboardData.fuel_efficiency_stats) return;
+            
+            const stats = dashboardData.fuel_efficiency_stats;
+            
+            document.getElementById('efficiencyLoading').style.display = 'none';
+            document.getElementById('efficiencyContent').style.display = 'block';
+            
+            // Update stats
+            document.getElementById('avgFuelPerEntry').textContent = `${stats.average_fuel_per_entry.toFixed(1)}L`;
+            document.getElementById('usersWithOdometer').textContent = stats.odometer_analytics.users_with_odometer;
+            document.getElementById('totalDistance').textContent = stats.odometer_analytics.total_distance_tracked 
+                ? `${stats.odometer_analytics.total_distance_tracked.toFixed(1)}km` : 'N/A';
+            document.getElementById('fuelPerKm').textContent = stats.odometer_analytics.fuel_per_km 
+                ? `${stats.odometer_analytics.fuel_per_km.toFixed(3)}L/km` : 'N/A';
+            
+            // Populate efficiency table
+            const efficiencyTable = document.getElementById('efficiencyTable');
+            efficiencyTable.innerHTML = '';
+            stats.most_efficient_users.forEach(user => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${user.email}</td>
+                    <td>${user.average_liters_per_entry.toFixed(1)}L</td>
+                    <td>${user.total_entries}</td>
+                    <td>${user.fuel_efficiency_score.toFixed(1)}</td>
+                `;
+                efficiencyTable.appendChild(row);
+            });
+            
+            // Create efficiency chart
+            if (dashboardData.consumption_patterns && dashboardData.consumption_patterns.fill_up_patterns) {
+                const fillupCtx = document.getElementById('fillupChart').getContext('2d');
+                const fillupData = dashboardData.consumption_patterns.fill_up_patterns;
+                new Chart(fillupCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Small (<10L)', 'Medium (10-30L)', 'Large (>30L)'],
+                        datasets: [{
+                            data: [fillupData.small_fillups, fillupData.medium_fillups, fillupData.large_fillups],
+                            backgroundColor: ['#3498db', '#2ecc71', '#e74c3c']
+                        }]
+                    },
+                    options: { responsive: true }
+                });
+            }
+        }
+
+        // Show behavior analytics
+        function showBehaviorAnalytics() {
+            if (!dashboardData || !dashboardData.user_behavior_stats) return;
+            
+            const behavior = dashboardData.user_behavior_stats;
+            
+            document.getElementById('behaviorLoading').style.display = 'none';
+            document.getElementById('behaviorContent').style.display = 'block';
+            
+            // Update stats
+            document.getElementById('avgSessionEntries').textContent = behavior.engagement_metrics.average_session_entries.toFixed(1);
+            document.getElementById('consistencyScore').textContent = `${behavior.engagement_metrics.user_consistency_score.toFixed(1)}%`;
+            document.getElementById('odometerUsageRate').textContent = `${behavior.engagement_metrics.feature_usage_stats.odometer_usage_rate.toFixed(1)}%`;
+            document.getElementById('retention7Day').textContent = `${behavior.retention_analysis.new_user_retention_7_day.toFixed(1)}%`;
+            
+            // Populate activity table
+            const activityTable = document.getElementById('activityTable');
+            activityTable.innerHTML = '';
+            behavior.activity_patterns.most_active_users.forEach(user => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${user.email}</td>
+                    <td>${user.entry_count}</td>
+                    <td>${user.days_active}</td>
+                    <td>${user.average_entries_per_day.toFixed(2)}</td>
+                    <td>${user.last_activity}</td>
+                `;
+                activityTable.appendChild(row);
+            });
+            
+            // Create weekly activity chart
+            if (dashboardData.consumption_patterns && dashboardData.consumption_patterns.weekly_patterns) {
+                const weeklyCtx = document.getElementById('weeklyActivityChart').getContext('2d');
+                const weeklyData = dashboardData.consumption_patterns.weekly_patterns;
+                new Chart(weeklyCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: weeklyData.map(d => d.day_of_week),
+                        datasets: [{
+                            label: 'Entries',
+                            data: weeklyData.map(d => d.entry_count),
+                            backgroundColor: '#3498db'
+                        }]
+                    },
+                    options: { responsive: true }
+                });
+            }
+        }
+
+        // Show cost analytics
+        function showCostAnalytics() {
+            if (!dashboardData || !dashboardData.cost_analytics) return;
+            
+            const costs = dashboardData.cost_analytics;
+            
+            document.getElementById('costsLoading').style.display = 'none';
+            document.getElementById('costsContent').style.display = 'block';
+            
+            // Update stats
+            document.getElementById('lowCostEntries').textContent = costs.cost_distribution.low_cost_entries;
+            document.getElementById('mediumCostEntries').textContent = costs.cost_distribution.medium_cost_entries;
+            document.getElementById('highCostEntries').textContent = costs.cost_distribution.high_cost_entries;
+            document.getElementById('avgCostPerUser').textContent = `$${costs.cost_per_user_stats.average_cost_per_user.toFixed(2)}`;
+            
+            // Create cost distribution chart
+            const costDistCtx = document.getElementById('costDistChart').getContext('2d');
+            new Chart(costDistCtx, {
+                type: 'pie',
+                data: {
+                    labels: costs.cost_distribution.cost_ranges.map(r => r.range),
+                    datasets: [{
+                        data: costs.cost_distribution.cost_ranges.map(r => r.count),
+                        backgroundColor: ['#2ecc71', '#f39c12', '#e74c3c']
+                    }]
+                },
+                options: { responsive: true }
+            });
+            
+            // Create top spenders chart
+            const spendersCtx = document.getElementById('topSpendersChart').getContext('2d');
+            new Chart(spendersCtx, {
+                type: 'bar',
+                data: {
+                    labels: costs.cost_per_user_stats.top_spenders.map(u => u.email.substring(0, 10) + '...'),
+                    datasets: [{
+                        label: 'Total Spent ($)',
+                        data: costs.cost_per_user_stats.top_spenders.map(u => u.total_spent),
+                        backgroundColor: '#9b59b6'
+                    }]
+                },
+                options: { responsive: true }
+            });
+        }
+
+        // Show predictive analytics
+        function showPredictiveAnalytics() {
+            if (!dashboardData || !dashboardData.predictive_analytics) return;
+            
+            const predictions = dashboardData.predictive_analytics;
+            
+            document.getElementById('predictionsLoading').style.display = 'none';
+            document.getElementById('predictionsContent').style.display = 'block';
+            
+            // Update stats
+            document.getElementById('nextMonthRevenue').textContent = `$${predictions.revenue_projections.next_month_revenue.toFixed(2)}`;
+            document.getElementById('nextQuarterRevenue').textContent = `$${predictions.revenue_projections.next_quarter_revenue.toFixed(2)}`;
+            document.getElementById('annualProjection').textContent = `$${predictions.revenue_projections.annual_revenue_projection.toFixed(2)}`;
+            document.getElementById('growthRate').textContent = `${predictions.user_growth_forecast[0]?.growth_rate.toFixed(1)}%`;
+            
+            // Create price forecast chart
+            const priceCtx = document.getElementById('priceForecastChart').getContext('2d');
+            new Chart(priceCtx, {
+                type: 'line',
+                data: {
+                    labels: predictions.fuel_price_forecast.map(f => `${f.month} ${f.year}`),
+                    datasets: [{
+                        label: 'Predicted Price ($)',
+                        data: predictions.fuel_price_forecast.map(f => f.predicted_price),
+                        borderColor: '#e74c3c',
+                        backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: { responsive: true }
+            });
+            
+            // Create user growth chart
+            const userGrowthCtx = document.getElementById('userGrowthChart').getContext('2d');
+            new Chart(userGrowthCtx, {
+                type: 'line',
+                data: {
+                    labels: predictions.user_growth_forecast.map(f => `${f.month} ${f.year}`),
+                    datasets: [{
+                        label: 'Predicted Users',
+                        data: predictions.user_growth_forecast.map(f => f.predicted_total_users),
+                        borderColor: '#2ecc71',
+                        backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: { responsive: true }
+            });
+            
+            // Create consumption forecast chart
+            const consumptionCtx = document.getElementById('consumptionForecastChart').getContext('2d');
+            new Chart(consumptionCtx, {
+                type: 'bar',
+                data: {
+                    labels: predictions.consumption_forecast.map(f => `${f.month} ${f.year}`),
+                    datasets: [{
+                        label: 'Predicted Consumption (L)',
+                        data: predictions.consumption_forecast.map(f => f.predicted_consumption),
+                        backgroundColor: '#3498db'
+                    }]
+                },
+                options: { responsive: true }
+            });
+        }
+
+        // Show price trends
+        function showPriceTrends() {
+            if (!dashboardData || !dashboardData.price_trends) return;
+            
+            const trends = dashboardData.price_trends;
+            
+            document.getElementById('trendsLoading').style.display = 'none';
+            document.getElementById('trendsContent').style.display = 'block';
+            
+            // Update stats
+            document.getElementById('volatilityIndex').textContent = `${trends.price_volatility.volatility_index.toFixed(2)}%`;
+            document.getElementById('priceStdDev').textContent = `$${trends.price_volatility.price_standard_deviation.toFixed(2)}`;
+            document.getElementById('lowestPrice').textContent = `$${trends.price_comparisons.lowest_recorded_price.toFixed(2)}`;
+            document.getElementById('highestPrice').textContent = `$${trends.price_comparisons.highest_recorded_price.toFixed(2)}`;
+            document.getElementById('priceChange').textContent = `${trends.price_comparisons.price_change_percentage.toFixed(2)}%`;
+        }
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDashboardData();
+        });
+    </script>
+</body>
+</html>

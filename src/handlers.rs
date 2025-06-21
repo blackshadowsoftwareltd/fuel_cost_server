@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    response::Json,
+    response::{Html, Json},
 };
 use serde_json::{json, Value};
 use sqlx::SqlitePool;
@@ -11,8 +11,9 @@ use crate::{
     database::{
         create_user, get_user_by_email, create_fuel_entry, create_fuel_entries, get_fuel_entries_by_user,
         get_fuel_entry_by_id, update_fuel_entry, delete_fuel_entry, delete_fuel_entries,
+        get_dashboard_stats, get_all_users, delete_user_by_id,
     },
-    models::{SignupRequest, SigninRequest, AuthResponse, CreateFuelEntryRequest, CreateFuelEntriesRequest, UpdateFuelEntryRequest, DeleteFuelEntriesRequest},
+    models::{SignupRequest, SigninRequest, AuthResponse, CreateFuelEntryRequest, CreateFuelEntriesRequest, UpdateFuelEntryRequest, DeleteFuelEntriesRequest, AdminActionRequest},
 };
 
 pub async fn signup(
@@ -476,4 +477,137 @@ pub async fn delete_fuel_entries_handler(
             ))
         }
     }
+}
+
+pub async fn get_dashboard_handler(
+    State(pool): State<SqlitePool>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    match get_dashboard_stats(&pool).await {
+        Ok(stats) => Ok(Json(json!(stats))),
+        Err(e) => {
+            eprintln!("Error getting dashboard stats: {}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "error": "Failed to get dashboard statistics",
+                    "details": e.to_string()
+                }))
+            ))
+        }
+    }
+}
+
+pub async fn get_all_users_handler(
+    State(pool): State<SqlitePool>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    match get_all_users(&pool).await {
+        Ok(users) => {
+            let safe_users: Vec<_> = users.into_iter().map(|user| json!({
+                "id": user.id,
+                "email": user.email,
+                "created_at": user.created_at
+            })).collect();
+            Ok(Json(json!(safe_users)))
+        }
+        Err(e) => {
+            eprintln!("Error getting all users: {}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "error": "Failed to get users",
+                    "details": e.to_string()
+                }))
+            ))
+        }
+    }
+}
+
+pub async fn admin_action_handler(
+    State(pool): State<SqlitePool>,
+    Json(request): Json<AdminActionRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    match request.action.as_str() {
+        "delete_user" => {
+            if let Some(user_id) = request.user_id {
+                match delete_user_by_id(&pool, &user_id).await {
+                    Ok(true) => Ok(Json(json!({
+                        "message": "User deleted successfully",
+                        "user_id": user_id
+                    }))),
+                    Ok(false) => Err((
+                        StatusCode::NOT_FOUND,
+                        Json(json!({
+                            "error": "User not found",
+                            "details": format!("No user found with id '{}'", user_id)
+                        }))
+                    )),
+                    Err(e) => {
+                        eprintln!("Error deleting user {}: {}", user_id, e);
+                        Err((
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(json!({
+                                "error": "Failed to delete user",
+                                "details": e.to_string()
+                            }))
+                        ))
+                    }
+                }
+            } else {
+                Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({
+                        "error": "Missing user_id",
+                        "details": "user_id is required for delete_user action"
+                    }))
+                ))
+            }
+        }
+        "delete_entry" => {
+            if let (Some(user_id), Some(entry_id)) = (request.user_id, request.entry_id) {
+                match delete_fuel_entry(&pool, &entry_id, &user_id).await {
+                    Ok(true) => Ok(Json(json!({
+                        "message": "Fuel entry deleted successfully",
+                        "entry_id": entry_id,
+                        "user_id": user_id
+                    }))),
+                    Ok(false) => Err((
+                        StatusCode::NOT_FOUND,
+                        Json(json!({
+                            "error": "Fuel entry not found",
+                            "details": format!("No fuel entry found with id '{}' for user '{}'", entry_id, user_id)
+                        }))
+                    )),
+                    Err(e) => {
+                        eprintln!("Error deleting fuel entry {} for user {}: {}", entry_id, user_id, e);
+                        Err((
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(json!({
+                                "error": "Failed to delete fuel entry",
+                                "details": e.to_string()
+                            }))
+                        ))
+                    }
+                }
+            } else {
+                Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({
+                        "error": "Missing parameters",
+                        "details": "Both user_id and entry_id are required for delete_entry action"
+                    }))
+                ))
+            }
+        }
+        _ => Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": "Invalid action",
+                "details": format!("Unknown action '{}'", request.action)
+            }))
+        ))
+    }
+}
+
+pub async fn serve_dashboard() -> Html<&'static str> {
+    Html(include_str!("../index.html"))
 }

@@ -1,9 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fuel Cost Server - Admin Dashboard</title>
+    <script>
+        // ===== REST API SERVER CONFIGURATION =====
+        const API_BASE_URL = 'http://fuelcost/blackshadow.software';
+        // Change this URL to point to your API server
+        // Examples:
+        // const API_BASE_URL = 'http://localhost:8880';
+        // const API_BASE_URL = 'https://your-domain.com';
+        // const API_BASE_URL = ''; // Use relative URLs (same domain/port)
+        // ==========================================
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
@@ -72,7 +83,8 @@
             white-space: nowrap;
         }
 
-        .nav-btn:hover, .nav-btn.active {
+        .nav-btn:hover,
+        .nav-btn.active {
             background: rgba(255, 255, 255, 0.1);
             border-bottom-color: #3498db;
         }
@@ -91,8 +103,15 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .stats-grid {
@@ -175,7 +194,8 @@
             border-collapse: collapse;
         }
 
-        th, td {
+        th,
+        td {
             padding: 15px;
             text-align: left;
             border-bottom: 1px solid #ecf0f1;
@@ -239,7 +259,9 @@
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         .error {
@@ -379,6 +401,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="dashboard-container">
         <div class="header">
@@ -783,7 +806,7 @@
                         <button class="btn btn-danger" onclick="showDangerActions()">⚠️ Danger Zone</button>
                     </div>
                     <div id="actionResult"></div>
-                    
+
                     <div id="dangerZone" style="display: none;">
                         <div class="admin-section" style="border: 2px solid #e74c3c;">
                             <h3 style="color: #e74c3c;">⚠️ Danger Zone - Use with Caution</h3>
@@ -797,15 +820,18 @@
 
                     <div id="deleteUserForm" style="display: none;" class="admin-section">
                         <h3>Delete User</h3>
-                        <input type="text" id="deleteUserId" placeholder="Enter User ID" style="width: 300px; padding: 10px; margin-right: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                        <input type="text" id="deleteUserId" placeholder="Enter User ID"
+                            style="width: 300px; padding: 10px; margin-right: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
                         <button class="btn btn-danger" onclick="deleteUser()">Delete User</button>
                         <button class="btn" onclick="hideDeleteUserForm()">Cancel</button>
                     </div>
 
                     <div id="deleteEntryForm" style="display: none;" class="admin-section">
                         <h3>Delete Fuel Entry</h3>
-                        <input type="text" id="deleteEntryUserId" placeholder="Enter User ID" style="width: 200px; padding: 10px; margin-right: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
-                        <input type="text" id="deleteEntryId" placeholder="Enter Entry ID" style="width: 200px; padding: 10px; margin-right: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                        <input type="text" id="deleteEntryUserId" placeholder="Enter User ID"
+                            style="width: 200px; padding: 10px; margin-right: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                        <input type="text" id="deleteEntryId" placeholder="Enter Entry ID"
+                            style="width: 200px; padding: 10px; margin-right: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
                         <button class="btn btn-danger" onclick="deleteEntry()">Delete Entry</button>
                         <button class="btn" onclick="hideDeleteEntryForm()">Cancel</button>
                     </div>
@@ -824,18 +850,18 @@
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
             });
-            
+
             // Remove active class from all nav buttons
             document.querySelectorAll('.nav-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
-            
+
             // Show selected tab
             document.getElementById(tabName).classList.add('active');
-            
+
             // Add active class to clicked button
             event.target.classList.add('active');
-            
+
             // Load data for the tab if needed
             if (tabName === 'analytics' && !dashboardData) {
                 loadDashboardData();
@@ -859,12 +885,12 @@
         // Load dashboard analytics data
         async function loadDashboardData() {
             try {
-                const response = await fetch('/api/dashboard');
+                const response = await fetch(`${API_BASE_URL}/api/dashboard`);
                 if (!response.ok) throw new Error('Failed to fetch dashboard data');
-                
+
                 dashboardData = await response.json();
                 displayDashboardData(dashboardData);
-                
+
                 document.getElementById('analyticsLoading').style.display = 'none';
                 document.getElementById('analyticsContent').style.display = 'block';
             } catch (error) {
@@ -880,7 +906,7 @@
             document.getElementById('totalCost').textContent = `$${data.total_fuel_cost.toFixed(2)}`;
             document.getElementById('totalLiters').textContent = `${data.total_liters.toFixed(1)}L`;
             document.getElementById('avgPrice').textContent = `$${data.average_price_per_liter.toFixed(2)}`;
-            
+
             // Calculate and display average mileage
             const avgMileage = data.total_liters > 0 ? (data.total_distance || 0) / data.total_liters : 0;
             document.getElementById('avgMileage').textContent = `${avgMileage.toFixed(2)} km/L`;
@@ -954,7 +980,7 @@
                         y: {
                             beginAtZero: true,
                             ticks: {
-                                callback: function(value) {
+                                callback: function (value) {
                                     return '$' + value.toFixed(0);
                                 }
                             }
@@ -999,12 +1025,12 @@
         // Load users data
         async function loadUsersData() {
             try {
-                const response = await fetch('/api/admin/users');
+                const response = await fetch(`${API_BASE_URL}/api/admin/users`);
                 if (!response.ok) throw new Error('Failed to fetch users data');
-                
+
                 usersData = await response.json();
                 displayUsersData(usersData);
-                
+
                 document.getElementById('usersLoading').style.display = 'none';
                 document.getElementById('usersContent').style.display = 'block';
             } catch (error) {
@@ -1038,7 +1064,7 @@
         // Show recent entries
         function showRecentEntries() {
             if (!dashboardData) return;
-            
+
             document.getElementById('entriesLoading').style.display = 'none';
             document.getElementById('entriesContent').style.display = 'block';
 
@@ -1068,13 +1094,13 @@
         function refreshAllData() {
             dashboardData = null;
             usersData = null;
-            
+
             if (document.getElementById('analytics').classList.contains('active')) {
                 document.getElementById('analyticsContent').style.display = 'none';
                 document.getElementById('analyticsLoading').style.display = 'block';
                 loadDashboardData();
             }
-            
+
             if (document.getElementById('users').classList.contains('active')) {
                 document.getElementById('usersContent').style.display = 'none';
                 document.getElementById('usersLoading').style.display = 'block';
@@ -1087,7 +1113,7 @@
         function exportData() {
             if (dashboardData) {
                 const dataStr = JSON.stringify(dashboardData, null, 2);
-                const dataBlob = new Blob([dataStr], {type: 'application/json'});
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
                 const url = URL.createObjectURL(dataBlob);
                 const link = document.createElement('a');
                 link.href = url;
@@ -1141,7 +1167,7 @@
                 showMessage('Please enter a user ID', 'error');
                 return;
             }
-            
+
             if (confirm(`Are you sure you want to delete user with ID "${userId}"? This will also delete all their fuel entries. This action cannot be undone.`)) {
                 performAdminAction('delete_user', userId);
                 hideDeleteUserForm();
@@ -1151,12 +1177,12 @@
         function deleteEntry() {
             const userId = document.getElementById('deleteEntryUserId').value.trim();
             const entryId = document.getElementById('deleteEntryId').value.trim();
-            
+
             if (!userId || !entryId) {
                 showMessage('Please enter both User ID and Entry ID', 'error');
                 return;
             }
-            
+
             if (confirm(`Are you sure you want to delete this fuel entry? This action cannot be undone.`)) {
                 performAdminAction('delete_entry', userId, entryId);
                 hideDeleteEntryForm();
@@ -1170,12 +1196,12 @@
                     action: action,
                     user_id: userId
                 };
-                
+
                 if (entryId) {
                     payload.entry_id = entryId;
                 }
 
-                const response = await fetch('/api/admin/action', {
+                const response = await fetch(`${API_BASE_URL}/api/admin/action`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -1212,20 +1238,20 @@
         // Show efficiency analytics
         function showEfficiencyAnalytics() {
             if (!dashboardData || !dashboardData.fuel_efficiency_stats) return;
-            
+
             const stats = dashboardData.fuel_efficiency_stats;
-            
+
             document.getElementById('efficiencyLoading').style.display = 'none';
             document.getElementById('efficiencyContent').style.display = 'block';
-            
+
             // Update stats
             document.getElementById('avgFuelPerEntry').textContent = `${stats.average_fuel_per_entry.toFixed(1)}L`;
             document.getElementById('usersWithOdometer').textContent = stats.odometer_analytics.users_with_odometer;
-            document.getElementById('totalDistance').textContent = stats.odometer_analytics.total_distance_tracked 
+            document.getElementById('totalDistance').textContent = stats.odometer_analytics.total_distance_tracked
                 ? `${stats.odometer_analytics.total_distance_tracked.toFixed(1)}km` : 'N/A';
-            document.getElementById('fuelPerKm').textContent = stats.odometer_analytics.fuel_per_km 
+            document.getElementById('fuelPerKm').textContent = stats.odometer_analytics.fuel_per_km
                 ? `${stats.odometer_analytics.fuel_per_km.toFixed(3)}L/km` : 'N/A';
-            
+
             // Populate efficiency table
             const efficiencyTable = document.getElementById('efficiencyTable');
             efficiencyTable.innerHTML = '';
@@ -1239,7 +1265,7 @@
                 `;
                 efficiencyTable.appendChild(row);
             });
-            
+
             // Create efficiency chart
             if (dashboardData.consumption_patterns && dashboardData.consumption_patterns.fill_up_patterns) {
                 const fillupCtx = document.getElementById('fillupChart').getContext('2d');
@@ -1261,18 +1287,18 @@
         // Show behavior analytics
         function showBehaviorAnalytics() {
             if (!dashboardData || !dashboardData.user_behavior_stats) return;
-            
+
             const behavior = dashboardData.user_behavior_stats;
-            
+
             document.getElementById('behaviorLoading').style.display = 'none';
             document.getElementById('behaviorContent').style.display = 'block';
-            
+
             // Update stats
             document.getElementById('avgSessionEntries').textContent = behavior.engagement_metrics.average_session_entries.toFixed(1);
             document.getElementById('consistencyScore').textContent = `${behavior.engagement_metrics.user_consistency_score.toFixed(1)}%`;
             document.getElementById('odometerUsageRate').textContent = `${behavior.engagement_metrics.feature_usage_stats.odometer_usage_rate.toFixed(1)}%`;
             document.getElementById('retention7Day').textContent = `${behavior.retention_analysis.new_user_retention_7_day.toFixed(1)}%`;
-            
+
             // Populate activity table
             const activityTable = document.getElementById('activityTable');
             activityTable.innerHTML = '';
@@ -1287,7 +1313,7 @@
                 `;
                 activityTable.appendChild(row);
             });
-            
+
             // Create weekly activity chart
             if (dashboardData.consumption_patterns && dashboardData.consumption_patterns.weekly_patterns) {
                 const weeklyCtx = document.getElementById('weeklyActivityChart').getContext('2d');
@@ -1310,18 +1336,18 @@
         // Show cost analytics
         function showCostAnalytics() {
             if (!dashboardData || !dashboardData.cost_analytics) return;
-            
+
             const costs = dashboardData.cost_analytics;
-            
+
             document.getElementById('costsLoading').style.display = 'none';
             document.getElementById('costsContent').style.display = 'block';
-            
+
             // Update stats
             document.getElementById('lowCostEntries').textContent = costs.cost_distribution.low_cost_entries;
             document.getElementById('mediumCostEntries').textContent = costs.cost_distribution.medium_cost_entries;
             document.getElementById('highCostEntries').textContent = costs.cost_distribution.high_cost_entries;
             document.getElementById('avgCostPerUser').textContent = `$${costs.cost_per_user_stats.average_cost_per_user.toFixed(2)}`;
-            
+
             // Create cost distribution chart
             const costDistCtx = document.getElementById('costDistChart').getContext('2d');
             new Chart(costDistCtx, {
@@ -1335,7 +1361,7 @@
                 },
                 options: { responsive: true }
             });
-            
+
             // Create top spenders chart
             const spendersCtx = document.getElementById('topSpendersChart').getContext('2d');
             new Chart(spendersCtx, {
@@ -1355,18 +1381,18 @@
         // Show predictive analytics
         function showPredictiveAnalytics() {
             if (!dashboardData || !dashboardData.predictive_analytics) return;
-            
+
             const predictions = dashboardData.predictive_analytics;
-            
+
             document.getElementById('predictionsLoading').style.display = 'none';
             document.getElementById('predictionsContent').style.display = 'block';
-            
+
             // Update stats
             document.getElementById('nextMonthRevenue').textContent = `$${predictions.revenue_projections.next_month_revenue.toFixed(2)}`;
             document.getElementById('nextQuarterRevenue').textContent = `$${predictions.revenue_projections.next_quarter_revenue.toFixed(2)}`;
             document.getElementById('annualProjection').textContent = `$${predictions.revenue_projections.annual_revenue_projection.toFixed(2)}`;
             document.getElementById('growthRate').textContent = `${predictions.user_growth_forecast[0]?.growth_rate.toFixed(1)}%`;
-            
+
             // Create price forecast chart
             const priceCtx = document.getElementById('priceForecastChart').getContext('2d');
             new Chart(priceCtx, {
@@ -1384,7 +1410,7 @@
                 },
                 options: { responsive: true }
             });
-            
+
             // Create user growth chart
             const userGrowthCtx = document.getElementById('userGrowthChart').getContext('2d');
             new Chart(userGrowthCtx, {
@@ -1402,7 +1428,7 @@
                 },
                 options: { responsive: true }
             });
-            
+
             // Create consumption forecast chart
             const consumptionCtx = document.getElementById('consumptionForecastChart').getContext('2d');
             new Chart(consumptionCtx, {
@@ -1422,12 +1448,12 @@
         // Show price trends
         function showPriceTrends() {
             if (!dashboardData || !dashboardData.price_trends) return;
-            
+
             const trends = dashboardData.price_trends;
-            
+
             document.getElementById('trendsLoading').style.display = 'none';
             document.getElementById('trendsContent').style.display = 'block';
-            
+
             // Update stats
             document.getElementById('volatilityIndex').textContent = `${trends.price_volatility.volatility_index.toFixed(2)}%`;
             document.getElementById('priceStdDev').textContent = `$${trends.price_volatility.price_standard_deviation.toFixed(2)}`;
@@ -1438,9 +1464,9 @@
 
         // Copy functionality
         function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(function() {
+            navigator.clipboard.writeText(text).then(function () {
                 showMessage(`Copied: ${text}`, 'success');
-            }).catch(function(err) {
+            }).catch(function (err) {
                 console.error('Failed to copy: ', err);
                 showMessage('Failed to copy to clipboard', 'error');
             });
@@ -1455,8 +1481,8 @@
         async function toggleService(service) {
             try {
                 const newState = !serviceStates[service];
-                
-                const response = await fetch('/api/admin/service-toggle', {
+
+                const response = await fetch(`${API_BASE_URL}/api/admin/service-toggle`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -1485,7 +1511,7 @@
         function updateServiceUI(service, enabled) {
             const button = document.getElementById(`${service}Toggle`);
             const status = document.getElementById(`${service}Status`);
-            
+
             status.textContent = enabled ? 'ON' : 'OFF';
             if (enabled) {
                 button.classList.remove('off');
@@ -1504,7 +1530,7 @@
 
         async function loadServiceStatus() {
             try {
-                const response = await fetch('/api/admin/service-status');
+                const response = await fetch(`${API_BASE_URL}/api/admin/service-status`);
                 if (response.ok) {
                     const status = await response.json();
                     serviceStates = status;
@@ -1517,10 +1543,11 @@
         }
 
         // Initialize dashboard
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             loadDashboardData();
             loadServiceStatus();
         });
     </script>
 </body>
+
 </html>

@@ -3,6 +3,7 @@ FROM rust:latest as builder
 WORKDIR /app
 
 COPY Cargo.toml ./
+COPY index.html ./
 
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release

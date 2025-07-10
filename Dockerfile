@@ -1,4 +1,4 @@
-FROM rust:1.70 as builder
+FROM rust:1.75 as builder
 
 WORKDIR /app
 
@@ -17,10 +17,10 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
- 
+
 COPY --from=builder /app/target/release/fuel_cost_server /usr/local/bin/fuel_cost_server
 
 EXPOSE 8080
- 
+
 CMD ["fuel_cost_server"]
 

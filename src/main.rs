@@ -13,23 +13,29 @@ use tracing_subscriber;
 
 use database::{create_database_pool, create_tables};
 use handlers::{
-    create_fuel_entries_handler, create_fuel_entry_handler, delete_fuel_entries_handler,
-    delete_fuel_entry_handler, get_fuel_entries_handler, get_fuel_entry_handler, signin, signup,
-    update_fuel_entry_handler, get_dashboard_handler, get_all_users_handler, admin_action_handler,
-    serve_dashboard, get_service_status_handler, toggle_service_handler, admin_login_handler, admin_verify_handler,
+    admin_action_handler, admin_login_handler, admin_verify_handler, create_fuel_entries_handler,
+    create_fuel_entry_handler, delete_fuel_entries_handler, delete_fuel_entry_handler,
+    get_all_users_handler, get_dashboard_handler, get_fuel_entries_handler, get_fuel_entry_handler,
+    get_service_status_handler, serve_dashboard, signin, signup, toggle_service_handler,
+    update_fuel_entry_handler,
 };
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize tracing
+    println!("🚀 Starting fuel cost server...");
+    println!("📝 Initializing tracing...");
     tracing_subscriber::fmt::init();
+    println!("✅ Tracing initialized");
 
     // Create database pool and run migrations
+    println!("🔌 Creating database pool...");
     let pool = create_database_pool().await?;
-
+    println!("✅ Database pool created");
     // Create tables if they don't exist
+    println!("📊 Creating tables...");
     create_tables(&pool).await?;
-
+    println!("✅ Tables created");
+    println!("🛣️ Building router...");
     // Build our application with routes
     let app = Router::new()
         // Auth routes
@@ -67,12 +73,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .layer(CorsLayer::permissive()),
         )
         .with_state(pool);
+    println!("✅ Router built");
 
     // Run the server
+    println!("🔗 Binding to 0.0.0.0:8880...");
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8880").await?;
-    println!("Server running on http://0.0.0.0:8880");
+    println!("✅ Server bound to http://0.0.0.0:8880");
 
+    println!("🎯 Starting server...");
     axum::serve(listener, app).await?;
 
+    println!("❌ Server stopped unexpectedly"); // Should never reach here
     Ok(())
 }

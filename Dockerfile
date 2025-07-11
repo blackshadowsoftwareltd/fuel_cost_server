@@ -2,48 +2,53 @@ FROM rust:latest as builder
 
 WORKDIR /app
 
+# Copy Cargo files first for better caching
 COPY Cargo.toml Cargo.lock ./
 COPY index.html ./
 
+# Create dummy main.rs to build dependencies
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release
 RUN rm -rf src
 
+# Copy actual source code
 COPY src ./src
+
+# Build the actual application
 RUN cargo build --release
 
 # Runtime stage
 FROM debian:bookworm-slim
 
-# Install ALL possible runtime dependencies
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl \
     libssl3 \
-    libssl-dev \
-    pkg-config \
-    libpq-dev \
     libsqlite3-0 \
     && rm -rf /var/lib/apt/lists/*
 
+# Create app directory and data directory
+RUN mkdir -p /app/data && chmod 755 /app/data
+
 # Copy the binary
 COPY --from=builder /app/target/release/fuel_cost_server /usr/local/bin/fuel_cost_server
-
-# Make sure it's executable
 RUN chmod +x /usr/local/bin/fuel_cost_server
 
-# TEST: Check if binary works
-RUN ldd /usr/local/bin/fuel_cost_server || echo "Static binary"
+# Copy static files if any
+COPY --from=builder /app/index.html /app/
 
-# DON'T use non-root user for debugging
-# RUN useradd -r -s /bin/false appuser
-# USER appuser
+# Create a user and give ownership of /app/data
+RUN useradd -r -s /bin/false appuser && \
+    chown -R appuser:appuser /app/data
+
+USER appuser
+WORKDIR /app
 
 EXPOSE 8880
 
-# Remove health check for now
-# HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-#   CMD curl -f http://localhost:8880/health || exit 1
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:8880/ || exit 1
 
-# Add debug output
-CMD ["sh", "-c", "echo 'Starting fuel_cost_server...' && /usr/local/bin/fuel_cost_server"]
+CMD ["fuel_cost_server"]

@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    http::{StatusCode, HeaderMap},
+    http::{HeaderMap, StatusCode},
     response::{Html, Json},
 };
 use serde_json::{json, Value};
@@ -9,11 +9,16 @@ use sqlx::SqlitePool;
 use crate::{
     auth::{hash_password, verify_password},
     database::{
-        create_user, get_user_by_email, create_fuel_entry, create_fuel_entries, get_fuel_entries_by_user,
-        get_fuel_entry_by_id, update_fuel_entry, delete_fuel_entry, delete_fuel_entries,
-        get_dashboard_stats, get_all_users, delete_user_by_id, get_service_status, update_service_status, is_service_enabled,
+        create_fuel_entries, create_fuel_entry, create_user, delete_fuel_entries,
+        delete_fuel_entry, delete_user_by_id, get_all_users, get_dashboard_stats,
+        get_fuel_entries_by_user, get_fuel_entry_by_id, get_service_status, get_user_by_email,
+        is_service_enabled, update_fuel_entry, update_service_status,
     },
-    models::{SignupRequest, SigninRequest, AuthResponse, CreateFuelEntryRequest, CreateFuelEntriesRequest, UpdateFuelEntryRequest, DeleteFuelEntriesRequest, AdminActionRequest, ServiceToggleRequest, AdminLoginRequest, AdminLoginResponse},
+    models::{
+        AdminActionRequest, AdminLoginRequest, AdminLoginResponse, AuthResponse,
+        CreateFuelEntriesRequest, CreateFuelEntryRequest, DeleteFuelEntriesRequest,
+        ServiceToggleRequest, SigninRequest, SignupRequest, UpdateFuelEntryRequest,
+    },
 };
 
 pub async fn signup(
@@ -28,7 +33,7 @@ pub async fn signup(
                 Json(json!({
                     "error": "Service unavailable",
                     "details": "Sign-up service is currently disabled"
-                }))
+                })),
             ));
         }
         Err(e) => {
@@ -45,7 +50,7 @@ pub async fn signup(
                 Json(json!({
                     "error": "User already exists",
                     "details": format!("A user with email '{}' already exists", request.email)
-                }))
+                })),
             ));
         }
         Ok(None) => {}
@@ -56,7 +61,7 @@ pub async fn signup(
                 Json(json!({
                     "error": "Database error",
                     "details": e.to_string()
-                }))
+                })),
             ));
         }
     }
@@ -71,7 +76,7 @@ pub async fn signup(
                 Json(json!({
                     "error": "Password processing failed",
                     "details": e.to_string()
-                }))
+                })),
             ));
         }
     };
@@ -86,7 +91,7 @@ pub async fn signup(
                 Json(json!({
                     "error": "Failed to create user",
                     "details": e.to_string()
-                }))
+                })),
             ));
         }
     };
@@ -111,7 +116,7 @@ pub async fn signin(
                 Json(json!({
                     "error": "Service unavailable",
                     "details": "Sign-in service is currently disabled"
-                }))
+                })),
             ));
         }
         Err(e) => {
@@ -138,7 +143,7 @@ pub async fn signin(
                     Json(json!({
                         "error": "Invalid credentials",
                         "details": "Password is incorrect"
-                    }))
+                    })),
                 )),
                 Err(e) => {
                     eprintln!("Password verification error: {}", e);
@@ -147,7 +152,7 @@ pub async fn signin(
                         Json(json!({
                             "error": "Authentication failed",
                             "details": e.to_string()
-                        }))
+                        })),
                     ))
                 }
             }
@@ -163,7 +168,7 @@ pub async fn signin(
                         Json(json!({
                             "error": "Password processing failed",
                             "details": e.to_string()
-                        }))
+                        })),
                     ));
                 }
             };
@@ -177,7 +182,7 @@ pub async fn signin(
                         Json(json!({
                             "error": "Failed to create user account",
                             "details": e.to_string()
-                        }))
+                        })),
                     ));
                 }
             };
@@ -196,7 +201,7 @@ pub async fn signin(
                 Json(json!({
                     "error": "Database error",
                     "details": e.to_string()
-                }))
+                })),
             ))
         }
     }
@@ -214,7 +219,7 @@ pub async fn create_fuel_entry_handler(
                 Json(json!({
                     "error": "Service unavailable",
                     "details": "Fuel entry service is currently disabled"
-                }))
+                })),
             ));
         }
         Err(e) => {
@@ -227,16 +232,16 @@ pub async fn create_fuel_entry_handler(
     match sqlx::query("SELECT id FROM users WHERE id = ?")
         .bind(&request.user_id)
         .fetch_optional(&pool)
-        .await 
+        .await
     {
-        Ok(Some(_)) => {}, // User exists, continue
+        Ok(Some(_)) => {} // User exists, continue
         Ok(None) => {
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(json!({
                     "error": "Invalid user ID",
                     "details": format!("No user found with id '{}'", request.user_id)
-                }))
+                })),
             ));
         }
         Err(e) => {
@@ -246,7 +251,7 @@ pub async fn create_fuel_entry_handler(
                 Json(json!({
                     "error": "Database validation error",
                     "details": e.to_string()
-                }))
+                })),
             ));
         }
     }
@@ -255,7 +260,7 @@ pub async fn create_fuel_entry_handler(
         Ok(entry) => Ok(Json(json!(entry))),
         Err(e) => {
             eprintln!("Error creating fuel entry: {}", e);
-            
+
             // Check for specific error types
             let error_msg = e.to_string();
             if error_msg.contains("FOREIGN KEY constraint failed") {
@@ -264,7 +269,7 @@ pub async fn create_fuel_entry_handler(
                     Json(json!({
                         "error": "Invalid user ID",
                         "details": format!("User ID '{}' does not exist", request.user_id)
-                    }))
+                    })),
                 ))
             } else {
                 Err((
@@ -272,7 +277,7 @@ pub async fn create_fuel_entry_handler(
                     Json(json!({
                         "error": "Failed to create fuel entry",
                         "details": error_msg
-                    }))
+                    })),
                 ))
             }
         }
@@ -291,7 +296,7 @@ pub async fn create_fuel_entries_handler(
                 Json(json!({
                     "error": "Service unavailable",
                     "details": "Fuel entry service is currently disabled"
-                }))
+                })),
             ));
         }
         Err(e) => {
@@ -307,7 +312,7 @@ pub async fn create_fuel_entries_handler(
             Json(json!({
                 "error": "Empty entries list",
                 "details": "At least one fuel entry must be provided"
-            }))
+            })),
         ));
     }
 
@@ -315,16 +320,16 @@ pub async fn create_fuel_entries_handler(
     match sqlx::query("SELECT id FROM users WHERE id = ?")
         .bind(&request.user_id)
         .fetch_optional(&pool)
-        .await 
+        .await
     {
-        Ok(Some(_)) => {}, // User exists, continue
+        Ok(Some(_)) => {} // User exists, continue
         Ok(None) => {
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(json!({
                     "error": "Invalid user ID",
                     "details": format!("No user found with id '{}'", request.user_id)
-                }))
+                })),
             ));
         }
         Err(e) => {
@@ -334,7 +339,7 @@ pub async fn create_fuel_entries_handler(
                 Json(json!({
                     "error": "Database validation error",
                     "details": e.to_string()
-                }))
+                })),
             ));
         }
     }
@@ -344,9 +349,9 @@ pub async fn create_fuel_entries_handler(
         Ok(entries) => {
             let created_count = entries.len();
             let duplicates_skipped = total_requested - created_count;
-            
+
             Ok(Json(json!({
-                "message": format!("Successfully processed {} entries: {} created, {} duplicates skipped", 
+                "message": format!("Successfully processed {} entries: {} created, {} duplicates skipped",
                                   total_requested, created_count, duplicates_skipped),
                 "total_requested": total_requested,
                 "created_count": created_count,
@@ -356,7 +361,7 @@ pub async fn create_fuel_entries_handler(
         }
         Err(e) => {
             eprintln!("Error creating fuel entries: {}", e);
-            
+
             // Check for specific error types
             let error_msg = e.to_string();
             if error_msg.contains("FOREIGN KEY constraint failed") {
@@ -365,7 +370,7 @@ pub async fn create_fuel_entries_handler(
                     Json(json!({
                         "error": "Invalid user ID",
                         "details": format!("User ID '{}' does not exist", request.user_id)
-                    }))
+                    })),
                 ))
             } else {
                 Err((
@@ -373,7 +378,7 @@ pub async fn create_fuel_entries_handler(
                     Json(json!({
                         "error": "Failed to create fuel entries",
                         "details": error_msg
-                    }))
+                    })),
                 ))
             }
         }
@@ -393,7 +398,7 @@ pub async fn get_fuel_entries_handler(
                 Json(json!({
                     "error": "Failed to get fuel entries",
                     "details": e.to_string()
-                }))
+                })),
             ))
         }
     }
@@ -410,16 +415,19 @@ pub async fn get_fuel_entry_handler(
             Json(json!({
                 "error": "Fuel entry not found",
                 "details": format!("No fuel entry found with id '{}' for user '{}'", id, user_id)
-            }))
+            })),
         )),
         Err(e) => {
-            eprintln!("Error getting fuel entry {} for user {}: {}", id, user_id, e);
+            eprintln!(
+                "Error getting fuel entry {} for user {}: {}",
+                id, user_id, e
+            );
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({
                     "error": "Failed to get fuel entry",
                     "details": e.to_string()
-                }))
+                })),
             ))
         }
     }
@@ -437,16 +445,19 @@ pub async fn update_fuel_entry_handler(
             Json(json!({
                 "error": "Fuel entry not found",
                 "details": format!("No fuel entry found with id '{}' for user '{}'", id, user_id)
-            }))
+            })),
         )),
         Err(e) => {
-            eprintln!("Error updating fuel entry {} for user {}: {}", id, user_id, e);
+            eprintln!(
+                "Error updating fuel entry {} for user {}: {}",
+                id, user_id, e
+            );
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({
                     "error": "Failed to update fuel entry",
                     "details": e.to_string()
-                }))
+                })),
             ))
         }
     }
@@ -463,16 +474,19 @@ pub async fn delete_fuel_entry_handler(
             Json(json!({
                 "error": "Fuel entry not found",
                 "details": format!("No fuel entry found with id '{}' for user '{}'", id, user_id)
-            }))
+            })),
         )),
         Err(e) => {
-            eprintln!("Error deleting fuel entry {} for user {}: {}", id, user_id, e);
+            eprintln!(
+                "Error deleting fuel entry {} for user {}: {}",
+                id, user_id, e
+            );
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({
                     "error": "Failed to delete fuel entry",
                     "details": e.to_string()
-                }))
+                })),
             ))
         }
     }
@@ -489,7 +503,7 @@ pub async fn delete_fuel_entries_handler(
             Json(json!({
                 "error": "Empty entry IDs list",
                 "details": "At least one entry ID must be provided"
-            }))
+            })),
         ));
     }
 
@@ -497,16 +511,16 @@ pub async fn delete_fuel_entries_handler(
     match sqlx::query("SELECT id FROM users WHERE id = ?")
         .bind(&request.user_id)
         .fetch_optional(&pool)
-        .await 
+        .await
     {
-        Ok(Some(_)) => {}, // User exists, continue
+        Ok(Some(_)) => {} // User exists, continue
         Ok(None) => {
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(json!({
                     "error": "Invalid user ID",
                     "details": format!("No user found with id '{}'", request.user_id)
-                }))
+                })),
             ));
         }
         Err(e) => {
@@ -516,7 +530,7 @@ pub async fn delete_fuel_entries_handler(
                 Json(json!({
                     "error": "Database validation error",
                     "details": e.to_string()
-                }))
+                })),
             ));
         }
     }
@@ -525,7 +539,7 @@ pub async fn delete_fuel_entries_handler(
         Ok((deleted_count, deleted_ids)) => {
             let total_requested = request.entry_ids.len();
             let not_found = total_requested - deleted_count;
-            
+
             Ok(Json(json!({
                 "message": format!("Successfully deleted {} fuel entries", deleted_count),
                 "deleted_count": deleted_count,
@@ -541,7 +555,7 @@ pub async fn delete_fuel_entries_handler(
                 Json(json!({
                     "error": "Failed to delete fuel entries",
                     "details": e.to_string()
-                }))
+                })),
             ))
         }
     }
@@ -559,7 +573,7 @@ pub async fn get_dashboard_handler(
                 Json(json!({
                     "error": "Failed to get dashboard statistics",
                     "details": e.to_string()
-                }))
+                })),
             ))
         }
     }
@@ -576,16 +590,21 @@ pub async fn get_all_users_handler(
             Json(json!({
                 "error": "Unauthorized",
                 "details": "Admin authentication required"
-            }))
+            })),
         ));
     }
     match get_all_users(&pool).await {
         Ok(users) => {
-            let safe_users: Vec<_> = users.into_iter().map(|user| json!({
-                "id": user.id,
-                "email": user.email,
-                "created_at": user.created_at
-            })).collect();
+            let safe_users: Vec<_> = users
+                .into_iter()
+                .map(|user| {
+                    json!({
+                        "id": user.id,
+                        "email": user.email,
+                        "created_at": user.created_at
+                    })
+                })
+                .collect();
             Ok(Json(json!(safe_users)))
         }
         Err(e) => {
@@ -595,7 +614,7 @@ pub async fn get_all_users_handler(
                 Json(json!({
                     "error": "Failed to get users",
                     "details": e.to_string()
-                }))
+                })),
             ))
         }
     }
@@ -613,7 +632,7 @@ pub async fn admin_action_handler(
             Json(json!({
                 "error": "Unauthorized",
                 "details": "Admin authentication required"
-            }))
+            })),
         ));
     }
     match request.action.as_str() {
@@ -629,7 +648,7 @@ pub async fn admin_action_handler(
                         Json(json!({
                             "error": "User not found",
                             "details": format!("No user found with id '{}'", user_id)
-                        }))
+                        })),
                     )),
                     Err(e) => {
                         eprintln!("Error deleting user {}: {}", user_id, e);
@@ -638,7 +657,7 @@ pub async fn admin_action_handler(
                             Json(json!({
                                 "error": "Failed to delete user",
                                 "details": e.to_string()
-                            }))
+                            })),
                         ))
                     }
                 }
@@ -648,7 +667,7 @@ pub async fn admin_action_handler(
                     Json(json!({
                         "error": "Missing user_id",
                         "details": "user_id is required for delete_user action"
-                    }))
+                    })),
                 ))
             }
         }
@@ -665,16 +684,19 @@ pub async fn admin_action_handler(
                         Json(json!({
                             "error": "Fuel entry not found",
                             "details": format!("No fuel entry found with id '{}' for user '{}'", entry_id, user_id)
-                        }))
+                        })),
                     )),
                     Err(e) => {
-                        eprintln!("Error deleting fuel entry {} for user {}: {}", entry_id, user_id, e);
+                        eprintln!(
+                            "Error deleting fuel entry {} for user {}: {}",
+                            entry_id, user_id, e
+                        );
                         Err((
                             StatusCode::INTERNAL_SERVER_ERROR,
                             Json(json!({
                                 "error": "Failed to delete fuel entry",
                                 "details": e.to_string()
-                            }))
+                            })),
                         ))
                     }
                 }
@@ -684,7 +706,7 @@ pub async fn admin_action_handler(
                     Json(json!({
                         "error": "Missing parameters",
                         "details": "Both user_id and entry_id are required for delete_entry action"
-                    }))
+                    })),
                 ))
             }
         }
@@ -693,14 +715,14 @@ pub async fn admin_action_handler(
             Json(json!({
                 "error": "Invalid action",
                 "details": format!("Unknown action '{}'", request.action)
-            }))
-        ))
+            })),
+        )),
     }
 }
 
-pub async fn serve_dashboard() -> Html<&'static str> {
-    Html(include_str!("../index.html"))
-}
+// pub async fn serve_dashboard() -> Html<&'static str> {
+//     Html(include_str!("../index.html"))
+// }
 
 pub async fn admin_login_handler(
     Json(request): Json<AdminLoginRequest>,
@@ -708,11 +730,11 @@ pub async fn admin_login_handler(
     // Hardcoded admin credentials
     const ADMIN_EMAIL: &str = "me.remon.ahammad@bss.io";
     const ADMIN_PASSWORD: &str = "rustybustyrestapideshboard";
-    
+
     if request.email == ADMIN_EMAIL && request.password == ADMIN_PASSWORD {
         // Generate a simple token (in production, use proper JWT)
         let token = format!("admin_token_{}", chrono::Utc::now().timestamp());
-        
+
         Ok(Json(json!(AdminLoginResponse {
             success: true,
             token: Some(token),
@@ -725,7 +747,7 @@ pub async fn admin_login_handler(
                 success: false,
                 token: None,
                 message: "Invalid admin credentials".to_string(),
-            }))
+            })),
         ))
     }
 }
@@ -743,13 +765,13 @@ pub async fn admin_verify_handler(
             }
         }
     }
-    
+
     Err((
         StatusCode::UNAUTHORIZED,
         Json(json!({
             "valid": false,
             "message": "Invalid or missing token"
-        }))
+        })),
     ))
 }
 
@@ -774,7 +796,7 @@ pub async fn get_service_status_handler(
             Json(json!({
                 "error": "Unauthorized",
                 "details": "Admin authentication required"
-            }))
+            })),
         ));
     }
     match get_service_status(&pool).await {
@@ -786,7 +808,7 @@ pub async fn get_service_status_handler(
                 Json(json!({
                     "error": "Failed to get service status",
                     "details": e.to_string()
-                }))
+                })),
             ))
         }
     }
@@ -804,7 +826,7 @@ pub async fn toggle_service_handler(
             Json(json!({
                 "error": "Unauthorized",
                 "details": "Admin authentication required"
-            }))
+            })),
         ));
     }
     // Validate service name
@@ -814,13 +836,17 @@ pub async fn toggle_service_handler(
             Json(json!({
                 "error": "Invalid service",
                 "details": format!("Unknown service '{}'", request.service)
-            }))
+            })),
         ));
     }
 
     match update_service_status(&pool, &request.service, request.enabled).await {
         Ok(true) => {
-            let status_text = if request.enabled { "enabled" } else { "disabled" };
+            let status_text = if request.enabled {
+                "enabled"
+            } else {
+                "disabled"
+            };
             Ok(Json(json!({
                 "message": format!("Service '{}' has been {}", request.service, status_text),
                 "service": request.service,
@@ -832,7 +858,7 @@ pub async fn toggle_service_handler(
             Json(json!({
                 "error": "Service not found",
                 "details": format!("Service '{}' not found", request.service)
-            }))
+            })),
         )),
         Err(e) => {
             eprintln!("Error toggling service {}: {}", request.service, e);
@@ -841,7 +867,7 @@ pub async fn toggle_service_handler(
                 Json(json!({
                     "error": "Failed to toggle service",
                     "details": e.to_string()
-                }))
+                })),
             ))
         }
     }

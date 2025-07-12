@@ -16,8 +16,7 @@ use handlers::{
     admin_action_handler, admin_login_handler, admin_verify_handler, create_fuel_entries_handler,
     create_fuel_entry_handler, delete_fuel_entries_handler, delete_fuel_entry_handler,
     get_all_users_handler, get_dashboard_handler, get_fuel_entries_handler, get_fuel_entry_handler,
-    get_service_status_handler, serve_dashboard, signin, signup, toggle_service_handler,
-    update_fuel_entry_handler,
+    get_service_status_handler, signin, signup, toggle_service_handler, update_fuel_entry_handler,
 };
 
 #[tokio::main]
@@ -65,8 +64,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/admin/login", post(admin_login_handler))
         .route("/api/admin/verify", get(admin_verify_handler))
         // Static files
-        .route("/", get(serve_dashboard))
-        .route("/dashboard", get(serve_dashboard))
+        // .route("/", get(serve_dashboard))
+        // .route("/dashboard", get(serve_dashboard))
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())

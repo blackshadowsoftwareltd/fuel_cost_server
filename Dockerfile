@@ -1,54 +1,78 @@
-FROM rust:latest as builder
+# syntax=docker/dockerfile:1
 
+# Comments are provided throughout this file to help you get started.
+# If you need more help, visit the Dockerfile reference guide at
+# https://docs.docker.com/go/dockerfile-reference/
+
+# Want to help us make this template better? Share your feedback here: https://forms.gle/ybq9Krt8jtBL3iCk7
+
+ARG RUST_VERSION=1.88.0
+ARG APP_NAME=fuel_cost_server
+
+################################################################################
+# Create a stage for building the application.
+
+FROM rust:${RUST_VERSION}-alpine AS build
+ARG APP_NAME
 WORKDIR /app
 
-# Copy Cargo files first for better caching
-COPY Cargo.toml Cargo.lock ./
-COPY index.html ./
+# Install host build dependencies.
+RUN apk add --no-cache clang lld musl-dev git
 
-# Create dummy main.rs to build dependencies
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release
-RUN rm -rf src
+# Build the application.
+# Leverage a cache mount to /usr/local/cargo/registry/
+# for downloaded dependencies, a cache mount to /usr/local/cargo/git/db
+# for git repository dependencies, and a cache mount to /app/target/ for
+# compiled dependencies which will speed up subsequent builds.
+# Leverage a bind mount to the src directory to avoid having to copy the
+# source code into the container. Once built, copy the executable to an
+# output directory before the cache mounted /app/target is unmounted.
+RUN --mount=type=bind,source=src,target=src \
+    --mount=type=bind,source=Cargo.toml,target=Cargo.toml \
+    --mount=type=bind,source=Cargo.lock,target=Cargo.lock \
+    --mount=type=cache,target=/app/target/ \
+    --mount=type=cache,target=/usr/local/cargo/git/db \
+    --mount=type=cache,target=/usr/local/cargo/registry/ \
+    cargo build --locked --release && \
+    cp ./target/release/$APP_NAME /bin/server
 
-# Copy actual source code
-COPY src ./src
+################################################################################
+# Create a new stage for running the application that contains the minimal
+# runtime dependencies for the application. This often uses a different base
+# image from the build stage where the necessary files are copied from the build
+# stage.
+#
+# The example below uses the alpine image as the foundation for running the app.
+# By specifying the "3.18" tag, it will use version 3.18 of alpine. If
+# reproducibility is important, consider using a digest
+# (e.g., alpine@sha256:664888ac9cfd28068e062c991ebcff4b4c7307dc8dd4df9e728bedde5c449d91).
+FROM alpine:3.18 AS final
 
-# Build the actual application
-RUN cargo build --release
+# Create a non-privileged user that the app will run under.
+# See https://docs.docker.com/go/dockerfile-user-best-practices/
+ARG UID=10001
+RUN adduser \
+    --disabled-password \
+    --gecos "" \
+    --home "/nonexistent" \
+    --shell "/sbin/nologin" \
+    --no-create-home \
+    --uid "${UID}" appuser
 
-# Runtime stage
-FROM debian:bookworm-slim
+# Create data directory and set permissions
+RUN mkdir -p /data && chown appuser:appuser /data
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    curl \
-    libssl3 \
-    libsqlite3-0 \
-    && rm -rf /var/lib/apt/lists/*
+# Copy the executable from the "build" stage.
+COPY --from=build /bin/server /bin/
+RUN chown appuser:appuser /bin/server
 
-# Create app directory and data directory
-RUN mkdir -p /app/data && chmod 755 /app/data
-
-# Copy the binary
-COPY --from=builder /app/target/release/fuel_cost_server /usr/local/bin/fuel_cost_server
-RUN chmod +x /usr/local/bin/fuel_cost_server
-
-# Copy static files if any
-COPY --from=builder /app/index.html /app/
-
-# Create a user and give ownership of /app/data
-RUN useradd -r -s /bin/false appuser && \
-    chown -R appuser:appuser /app/data
+# Set working directory to data directory
+WORKDIR /data
 
 USER appuser
-WORKDIR /app
 
+# Expose the port that the application listens on.
 EXPOSE 8880
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:8880/ || exit 1
-
-CMD ["fuel_cost_server"]
+# What the container should run when it is started.
+CMD ["/bin/server"]

@@ -15,17 +15,6 @@ use crate::models::{
     UserRegistrationStats, UserSpending, WeeklyPattern,
 };
 
-// pub async fn create_database_pool() -> Result<SqlitePool> {
-//     // Create database file if it doesn't exist
-//     let db_path = "fuel_cost.db";
-//     if !std::path::Path::new(db_path).exists() {
-//         fs::File::create(db_path)?;
-//     }
-
-//     let pool = SqlitePool::connect("sqlite:fuel_cost.db").await?;
-//     Ok(pool)
-// }
-
 pub async fn create_database_pool() -> Result<SqlitePool> {
     // Create database file if it doesn't exist
     let db_path = "fuel_cost.db";

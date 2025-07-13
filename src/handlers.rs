@@ -720,9 +720,9 @@ pub async fn admin_action_handler(
     }
 }
 
-// pub async fn serve_dashboard() -> Html<&'static str> {
-//     Html(include_str!("../index.html"))
-// }
+pub async fn serve_dashboard() -> Html<&'static str> {
+    Html(include_str!("../index.html"))
+}
 
 pub async fn admin_login_handler(
     Json(request): Json<AdminLoginRequest>,

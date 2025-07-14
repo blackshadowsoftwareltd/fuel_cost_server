@@ -16,7 +16,7 @@ use handlers::{
     admin_action_handler, admin_login_handler, admin_verify_handler, create_fuel_entries_handler,
     create_fuel_entry_handler, delete_fuel_entries_handler, delete_fuel_entry_handler,
     get_all_users_handler, get_dashboard_handler, get_fuel_entries_handler, get_fuel_entry_handler,
-    get_service_status_handler, serve_dashboard, signin, signup, toggle_service_handler,
+    get_service_status_handler, signin, signup, toggle_service_handler,
     update_fuel_entry_handler,
 };
 

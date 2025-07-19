@@ -20,7 +20,7 @@ services:
     network_mode: host
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./nginx/sites-availablez:/etc/nginx/sites-availablez
+      - ./nginx/sites-availablez:/etc/nginx/sites-available
       - ./nginx/sites-enabled:/etc/nginx/sites-enabled
     depends_on:
       - server

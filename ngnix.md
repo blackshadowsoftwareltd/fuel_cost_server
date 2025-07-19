@@ -138,7 +138,7 @@ sudo systemctl enable nginx
 ### Create Nginx Site Configuration
 
 ```bash
-sudo nano /etc/nginx/YOUR_SERVER_DOMAIN_URL
+sudo nano /etc/nginx/sites-available/YOUR_SERVER_DOMAIN_URL
 ```
 
 ### Nginx Configuration (HTTP Only)
@@ -168,7 +168,7 @@ server {
 
 ```bash
 # Create symbolic link to enable the site
-sudo ln -s /etc/nginx/YOUR_SERVER_DOMAIN_URL /etc/nginx/
+sudo ln -s /etc/nginx/sites-available/YOUR_SERVER_DOMAIN_URL /etc/nginx/sites-enabled/
 
 # Test Nginx configuration
 sudo nginx -t

@@ -168,7 +168,7 @@ server {
 
 ```bash
 # Create symbolic link to enable the site
-sudo ln -s /etc/nginx/YOUR_SERVER_DOMAIN_URL /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/YOUR_SERVER_DOMAIN_URL /etc/nginx/
 
 # Test Nginx configuration
 sudo nginx -t

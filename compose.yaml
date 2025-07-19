@@ -20,7 +20,7 @@ services:
     network_mode: host
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./nginx:/etc/nginx 
+      - ./nginx:/etc/nginx/sites-available
     depends_on:
       - server
     restart: unless-stopped

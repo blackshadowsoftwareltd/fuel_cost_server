@@ -21,7 +21,7 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf
       - ./nginx:/etc/nginx/sites-available
-      - ./nginx/sites-enabled:/etc/nginx/sites-enabled
+      # - ./nginx/sites-enabled:/etc/nginx/sites-enabled
     depends_on:
       - server
     restart: unless-stopped

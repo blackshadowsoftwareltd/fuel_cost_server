@@ -12,9 +12,19 @@ services:
     build:
       context: .
       target: final
-    ports:
-      - 8880:8880
+    network_mode: host
+    restart: unless-stopped
 
+  nginx:
+    image: nginx:latest
+    network_mode: host
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/sites-available:/etc/nginx/sites-available # nginx/fuelcost.blackshadow.software.http-only
+      - ./nginx/sites-enabled:/etc/nginx/sites-enabled
+    depends_on:
+      - server
+    restart: unless-stopped
 # The commented out section below is an example of how to define a PostgreSQL
 # database that your application can use. `depends_on` tells Docker Compose to
 # start the database before your application. The `db-data` volume persists the

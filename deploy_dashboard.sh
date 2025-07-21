@@ -25,7 +25,7 @@ NC='\033[0m' # No Color
 # Configuration variables (will be set by user input)
 DOMAIN=""
 PORT=""
-VPS_USER="root"
+VPS_USER="$(whoami)"  # Use current user instead of root
 VPS_IP=""
 SERVICE_NAME=""
 LOCAL_HTML_FILE="index.html"
@@ -199,6 +199,11 @@ echo ""
 info "📌 Step 3: VPS Configuration"
 VPS_IP=$(ask_input "Enter your VPS IP address" "" "validate_ip")
 info "✅ VPS IP set to: $VPS_IP"
+
+# Ask for VPS username
+info "💡 The script will use SSH with sudo instead of direct root access"
+VPS_USER=$(ask_input "Enter your VPS username (user with sudo privileges)" "$(whoami)")
+info "✅ VPS user set to: $VPS_USER"
 echo ""
 
 # Ask for Service Name
@@ -238,6 +243,7 @@ header "📋 Final Configuration Summary"
 echo ""
 info "Domain: $DOMAIN"
 info "VPS IP: $VPS_IP"
+info "VPS User: $VPS_USER (with sudo)"
 if [ "$SSL_ENABLED" = "y" ]; then
     info "Ports: 80 (HTTP redirect), 443 (HTTPS)"
     info "SSL Email: $SSL_EMAIL"
@@ -290,7 +296,8 @@ run_remote() {
     local cmd="$1"
     local description="${2:-Running remote command}"
     
-    if ! ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_IP "$cmd"; then
+    # Use sudo for commands that need root privileges
+    if ! ssh -o StrictHostKeyChecking=no $VPS_USER@$VPS_IP "sudo $cmd"; then
         error "$description failed"
         return 1
     fi
@@ -333,7 +340,40 @@ find_available_port() {
     return 1
 }
 
-# Function to handle Nginx startup with port conflict resolution
+# Function to ask user for alternative port
+ask_for_alternative_port() {
+    local current_port="$1"
+    local suggested_port=$((current_port + 1))
+    
+    warning "⚠️ Port $current_port is already in use!"
+    
+    # Show what's using the port
+    info "📊 Checking what's using port $current_port..."
+    run_remote "netstat -tlnp | grep :$current_port" "Showing port usage" || true
+    
+    echo ""
+    warning "🚫 Port $current_port is not available. Please choose an alternative port."
+    info "💡 Suggested alternatives: $suggested_port, $((suggested_port + 1)), $((suggested_port + 10))"
+    echo ""
+    
+    # Ask user for alternative port
+    local new_port
+    new_port=$(ask_input "Enter an alternative port number" "$suggested_port" "validate_port")
+    
+    # Check if the new port is available
+    if run_remote "netstat -ln | grep -q ':$new_port '" "Checking new port availability" 2>/dev/null; then
+        warning "Port $new_port is also in use. Let's try another one."
+        # Recursively ask until we find a free port
+        ask_for_alternative_port "$new_port"
+        return $?
+    else
+        log "✅ Port $new_port is available!"
+        PORT="$new_port"
+        return 0
+    fi
+}
+
+# Function to handle Nginx startup with user-prompted port selection
 start_nginx_with_port_handling() {
     local max_attempts=3
     local attempt=1
@@ -349,40 +389,53 @@ start_nginx_with_port_handling() {
         
         # Check if it's a port conflict
         if run_remote "systemctl status nginx 2>&1 | grep -q 'Address already in use'" "Checking for port conflict"; then
-            warning "Port conflict detected, finding alternative solution..."
+            warning "🚫 Port conflict detected!"
             
-            # Check what's using common ports
-            log "📊 Checking port usage..."
-            run_remote "netstat -tlnp | grep ':80\\|:443\\|:8080\\|:8090'" "Listing used ports" || true
+            # Show what's using common ports
+            log "📊 Current port usage:"
+            run_remote "netstat -tlnp | grep ':80\\|:443\\|:8080\\|:8090\\|:$PORT'" "Listing used ports" || true
             
-            # Try to resolve conflict by stopping conflicting services
-            warning "Attempting to resolve port conflicts..."
+            # Ask user what they want to do
+            echo ""
+            warning "⚠️ There are port conflicts preventing Nginx from starting."
+            info "Options:"
+            info "  1. Stop conflicting services automatically (like Apache)"
+            info "  2. Choose a different port for your service"
+            echo ""
             
-            # Stop Apache if it's running
-            if run_remote "systemctl is-active apache2" "Checking Apache status" 2>/dev/null; then
-                warning "Apache is running on port 80, stopping it..."
-                run_remote "systemctl stop apache2" "Stopping Apache" || true
-            fi
+            local choice
+            choice=$(ask_input "Choose option (1 for auto-fix, 2 for different port)" "2")
             
-            # Remove conflicting nginx sites
-            run_remote "rm -f /etc/nginx/sites-enabled/default" "Removing default site" || true
-            run_remote "find /etc/nginx/sites-enabled/ -name '*' -type l -exec rm -f {} +" "Removing conflicting sites" || true
-            
-            # If this is our custom port deployment, try finding a new port
-            if [ "$SSL_ENABLED" = "n" ] && [ "$PORT" != "80" ] && [ "$PORT" != "443" ]; then
-                warning "Looking for alternative port for custom port deployment..."
-                NEW_PORT=$(find_available_port "$PORT")
-                if [ $? -eq 0 ] && [ "$NEW_PORT" != "$PORT" ]; then
-                    warning "Port $PORT is in use, switching to port $NEW_PORT"
-                    PORT="$NEW_PORT"
+            if [ "$choice" = "1" ]; then
+                # Try automatic conflict resolution
+                warning "🔧 Attempting automatic conflict resolution..."
+                
+                # Stop Apache if it's running
+                if run_remote "systemctl is-active apache2" "Checking Apache status" 2>/dev/null; then
+                    warning "🛑 Stopping Apache which is using port 80..."
+                    run_remote "systemctl stop apache2" "Stopping Apache" || true
+                fi
+                
+                # Remove conflicting nginx sites
+                run_remote "rm -f /etc/nginx/sites-enabled/default" "Removing default site" || true
+                run_remote "find /etc/nginx/sites-enabled/ -name '*' -type l -exec rm -f {} +" "Removing conflicting sites" || true
+                
+            else
+                # Ask for alternative port
+                if [ "$SSL_ENABLED" = "n" ]; then
+                    ask_for_alternative_port "$PORT"
                     
                     # Update nginx configuration with new port
                     log "📝 Updating Nginx configuration with new port $PORT..."
                     recreate_nginx_config
+                else
+                    error "SSL is enabled and requires ports 80/443. Please stop conflicting services manually."
+                    return 1
                 fi
             fi
         else
             # Different error, show details
+            error "❌ Nginx failed to start for a different reason:"
             run_remote "systemctl status nginx" "Showing Nginx status" || true
             run_remote "journalctl -u nginx --no-pager -n 10" "Showing Nginx logs" || true
         fi
@@ -457,7 +510,7 @@ server {
     gzip on;
     gzip_vary on;
     gzip_min_length 1024;
-    gzip_proxied expired no-cache no-store private must-revalidate auth;
+    gzip_proxied expired no-cache no-store private auth;
     gzip_types
         text/plain
         text/css
@@ -664,7 +717,7 @@ server {
     gzip on;
     gzip_vary on;
     gzip_min_length 1024;
-    gzip_proxied expired no-cache no-store private must-revalidate auth;
+    gzip_proxied expired no-cache no-store private auth;
     gzip_types
         text/plain
         text/css
@@ -736,7 +789,7 @@ server {
     gzip on;
     gzip_vary on;
     gzip_min_length 1024;
-    gzip_proxied expired no-cache no-store private must-revalidate auth;
+    gzip_proxied expired no-cache no-store private auth;
     gzip_types
         text/plain
         text/css
@@ -769,15 +822,16 @@ log "✅ Nginx configuration created for '$DOMAIN'"
 echo ""
 log "⚙️ Step 4: Configuring Nginx..."
 
+# Clean up any conflicting sites first
+log "🧹 Cleaning up conflicting Nginx sites..."
+run_remote "rm -f /etc/nginx/sites-enabled/default" "Removing default site" || true
+run_remote "rm -f /etc/nginx/sites-enabled/fuelcost.blackshadow.software" "Removing conflicting fuelcost site" || true
+run_remote "find /etc/nginx/sites-enabled/ -name '*blackshadow*' -type l -delete" "Removing other blackshadow sites" || true
+
 # Enable the site and configure Nginx
 if ! run_remote "ln -sf $NGINX_SITE_CONFIG /etc/nginx/sites-enabled/" "Enabling Nginx site"; then
     error "Failed to enable Nginx site"
     exit 1
-fi
-
-# Remove default site if it exists and conflicts
-if [ "$SSL_ENABLED" = "y" ] || [ "$PORT" = "80" ]; then
-    run_remote "rm -f /etc/nginx/sites-enabled/default" "Removing default site (if exists)" || true
 fi
 
 # Test Nginx configuration

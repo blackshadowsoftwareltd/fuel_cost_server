@@ -33,6 +33,8 @@ REMOTE_DIR=""
 NGINX_SITE_CONFIG=""
 SSL_ENABLED="n"
 SSL_EMAIL=""
+USE_REVERSE_PROXY="n"
+PROXY_TARGET_PORT=""
 
 # Logging functions
 log() {
@@ -217,8 +219,22 @@ echo ""
 REMOTE_DIR="/var/www/$SERVICE_NAME"
 NGINX_SITE_CONFIG="/etc/nginx/sites-available/$DOMAIN"
 
+# Ask about reverse proxy setup
+info "📌 Step 5: Reverse Proxy Configuration"
+info "💡 If port 80 is used by another service, we can set up Nginx as a reverse proxy"
+USE_REVERSE_PROXY=$(ask_yes_no "Set up Nginx as reverse proxy (recommended if port 80 is busy)?" "y")
+
+if [ "$USE_REVERSE_PROXY" = "y" ]; then
+    info "✅ Will configure Nginx to reverse proxy to your service on port $PORT"
+    info "📍 Your dashboard will be accessible at: http://$DOMAIN (no port needed)"
+    PROXY_TARGET_PORT="$PORT"
+    PORT="80"  # Nginx will listen on 80 and proxy to the target port
+else
+    info "✅ Will use direct port configuration"
+fi
+
 # Ask for SSL preference
-info "📌 Step 5: SSL/HTTPS Configuration"
+info "📌 Step 6: SSL/HTTPS Configuration"
 SSL_ENABLED=$(ask_yes_no "Do you want to enable SSL/HTTPS with Let's Encrypt?" "n")
 
 if [ "$SSL_ENABLED" = "y" ]; then
@@ -244,7 +260,10 @@ echo ""
 info "Domain: $DOMAIN"
 info "VPS IP: $VPS_IP"
 info "VPS User: $VPS_USER (with sudo)"
-if [ "$SSL_ENABLED" = "y" ]; then
+if [ "$USE_REVERSE_PROXY" = "y" ]; then
+    info "Setup: Reverse Proxy (Nginx:80 → Service:$PROXY_TARGET_PORT)"
+    info "Access URL: http://$DOMAIN (no port needed)"
+elif [ "$SSL_ENABLED" = "y" ]; then
     info "Ports: 80 (HTTP redirect), 443 (HTTPS)"
     info "SSL Email: $SSL_EMAIL"
 else
@@ -254,6 +273,7 @@ info "Service Name: $SERVICE_NAME"
 info "Remote Directory: $REMOTE_DIR"
 info "Nginx Config: $NGINX_SITE_CONFIG"
 info "SSL Enabled: $([ "$SSL_ENABLED" = "y" ] && echo "Yes" || echo "No")"
+info "Reverse Proxy: $([ "$USE_REVERSE_PROXY" = "y" ] && echo "Yes" || echo "No")"
 echo ""
 
 # Final confirmation
@@ -634,11 +654,161 @@ fi
 
 log "✅ HTML file uploaded to $REMOTE_DIR/"
 
+# If using reverse proxy, set up a simple HTTP server to serve the static files
+if [ "$USE_REVERSE_PROXY" = "y" ]; then
+    echo ""
+    log "🔧 Step 2b: Setting up static file server for reverse proxy..."
+    
+    # Create a simple Python HTTP server service
+    cat > /tmp/simple_server.py << EOF
+#!/usr/bin/env python3
+import http.server
+import socketserver
+import os
+import sys
+
+PORT = $PROXY_TARGET_PORT
+DIRECTORY = "$REMOTE_DIR"
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=DIRECTORY, **kwargs)
+    
+    def end_headers(self):
+        # Add CORS headers
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        super().end_headers()
+
+if __name__ == "__main__":
+    os.chdir(DIRECTORY)
+    with socketserver.TCPServer(("127.0.0.1", PORT), Handler) as httpd:
+        print(f"Serving {DIRECTORY} at http://127.0.0.1:{PORT}")
+        httpd.serve_forever()
+EOF
+    
+    # Upload the server script
+    if ! copy_to_vps "/tmp/simple_server.py" "/usr/local/bin/${SERVICE_NAME}_server.py" "Static file server upload"; then
+        error "Failed to upload static file server"
+        exit 1
+    fi
+    rm -f /tmp/simple_server.py
+    
+    # Make it executable
+    run_remote "chmod +x /usr/local/bin/${SERVICE_NAME}_server.py" "Making server executable" || true
+    
+    # Create systemd service for the static server
+    cat > /tmp/static_server.service << EOF
+[Unit]
+Description=$SERVICE_NAME Static File Server
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=$REMOTE_DIR
+ExecStart=/usr/bin/python3 /usr/local/bin/${SERVICE_NAME}_server.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    
+    # Upload and configure the service
+    if ! copy_to_vps "/tmp/static_server.service" "/etc/systemd/system/${SERVICE_NAME}.service" "Service file upload"; then
+        error "Failed to upload service file"
+        exit 1
+    fi
+    rm -f /tmp/static_server.service
+    
+    # Enable and start the service
+    run_remote "systemctl daemon-reload" "Reloading systemd"
+    run_remote "systemctl enable ${SERVICE_NAME}.service" "Enabling static server service"
+    run_remote "systemctl start ${SERVICE_NAME}.service" "Starting static server service"
+    
+    # Check if service is running
+    if run_remote "systemctl is-active --quiet ${SERVICE_NAME}.service" "Checking service status"; then
+        log "✅ Static file server started successfully on port $PROXY_TARGET_PORT"
+    else
+        warning "⚠️ Static file server may have issues. Checking status..."
+        run_remote "systemctl status ${SERVICE_NAME}.service" "Showing service status" || true
+    fi
+fi
+
 echo ""
 log "🌐 Step 3: Creating Nginx configuration for '$DOMAIN'..."
 
-# Create Nginx site configuration based on SSL preference
-if [ "$SSL_ENABLED" = "y" ]; then
+# Create Nginx site configuration based on setup type
+if [ "$USE_REVERSE_PROXY" = "y" ]; then
+    # Reverse Proxy Configuration (Nginx listens on 80, proxies to service port)
+    cat > /tmp/nginx_config << EOF
+# Reverse Proxy server for $SERVICE_NAME
+server {
+    listen 80;
+    server_name $DOMAIN;
+    
+    # Reverse proxy to the service
+    location / {
+        proxy_pass http://127.0.0.1:$PROXY_TARGET_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+        proxy_read_timeout 86400;
+        
+        # Add CORS headers for API requests
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
+        add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
+        add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+    }
+    
+    # Handle OPTIONS requests for CORS preflight
+    location = /options-handler {
+        add_header 'Access-Control-Allow-Origin' '*';
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE';
+        add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization';
+        add_header 'Content-Type' 'text/plain; charset=utf-8';
+        add_header 'Content-Length' 0;
+        return 204;
+    }
+    
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
+    add_header Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: http: data:; img-src 'self' data: https: http:;" always;
+    
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_proxied expired no-cache no-store private auth;
+    gzip_types
+        text/plain
+        text/css
+        text/xml
+        text/javascript
+        application/x-javascript
+        application/xml+rss
+        application/javascript
+        application/json
+        application/xml
+        text/html;
+    
+    # Access and error logs for $SERVICE_NAME
+    access_log /var/log/nginx/${SERVICE_NAME}_access.log;
+    error_log /var/log/nginx/${SERVICE_NAME}_error.log;
+}
+EOF
+elif [ "$SSL_ENABLED" = "y" ]; then
     # SSL Configuration (will redirect HTTP to HTTPS)
     cat > /tmp/nginx_config << EOF
 # HTTP server (redirects to HTTPS)
@@ -916,6 +1086,9 @@ if [ "$SSL_ENABLED" = "y" ]; then
         TEST_URL="http://$DOMAIN"
         TEST_PORT=":$PORT"
     fi
+elif [ "$USE_REVERSE_PROXY" = "y" ]; then
+    TEST_URL="http://$DOMAIN"
+    TEST_PORT=""
 else
     TEST_URL="http://$DOMAIN"
     TEST_PORT=":$PORT"
@@ -934,7 +1107,12 @@ sleep 3
 
 # Test if the site is accessible
 log "Testing HTTP connection..."
-if [ "$SSL_ENABLED" = "y" ]; then
+if [ "$USE_REVERSE_PROXY" = "y" ]; then
+    HTTP_STATUS=$(run_remote "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 30 http://localhost/ 2>/dev/null || echo 'FAILED'")
+    # Also test the backend service
+    BACKEND_STATUS=$(run_remote "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 30 http://localhost:$PROXY_TARGET_PORT/ 2>/dev/null || echo 'FAILED'")
+    info "📊 Backend service (port $PROXY_TARGET_PORT): $BACKEND_STATUS"
+elif [ "$SSL_ENABLED" = "y" ]; then
     HTTP_STATUS=$(run_remote "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 30 https://localhost/ 2>/dev/null || echo 'FAILED'")
 else
     HTTP_STATUS=$(run_remote "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 30 http://localhost:$PORT/ 2>/dev/null || echo 'FAILED'")

@@ -309,6 +309,184 @@ copy_to_vps() {
     return 0
 }
 
+# Function to find next available port on VPS
+find_available_port() {
+    local start_port="$1"
+    local max_attempts=50
+    local current_port=$start_port
+    
+    log "🔍 Checking for available ports starting from $start_port..."
+    
+    for ((i=0; i<max_attempts; i++)); do
+        if run_remote "! netstat -ln | grep -q ':$current_port '" "Checking port $current_port" 2>/dev/null; then
+            log "✅ Found available port: $current_port"
+            echo "$current_port"
+            return 0
+        else
+            warning "Port $current_port is in use, trying next port..."
+            ((current_port++))
+        fi
+    done
+    
+    error "Could not find available port after checking $max_attempts ports starting from $start_port"
+    return 1
+}
+
+# Function to handle Nginx startup with port conflict resolution
+start_nginx_with_port_handling() {
+    local max_attempts=3
+    local attempt=1
+    
+    while [ $attempt -le $max_attempts ]; do
+        log "🚀 Attempt $attempt: Starting Nginx..."
+        
+        # Try to start Nginx
+        if run_remote "systemctl start nginx" "Starting Nginx (attempt $attempt)" 2>/dev/null; then
+            log "✅ Nginx started successfully"
+            return 0
+        fi
+        
+        # Check if it's a port conflict
+        if run_remote "systemctl status nginx 2>&1 | grep -q 'Address already in use'" "Checking for port conflict"; then
+            warning "Port conflict detected, finding alternative solution..."
+            
+            # Check what's using common ports
+            log "📊 Checking port usage..."
+            run_remote "netstat -tlnp | grep ':80\\|:443\\|:8080\\|:8090'" "Listing used ports" || true
+            
+            # Try to resolve conflict by stopping conflicting services
+            warning "Attempting to resolve port conflicts..."
+            
+            # Stop Apache if it's running
+            if run_remote "systemctl is-active apache2" "Checking Apache status" 2>/dev/null; then
+                warning "Apache is running on port 80, stopping it..."
+                run_remote "systemctl stop apache2" "Stopping Apache" || true
+            fi
+            
+            # Remove conflicting nginx sites
+            run_remote "rm -f /etc/nginx/sites-enabled/default" "Removing default site" || true
+            run_remote "find /etc/nginx/sites-enabled/ -name '*' -type l -exec rm -f {} +" "Removing conflicting sites" || true
+            
+            # If this is our custom port deployment, try finding a new port
+            if [ "$SSL_ENABLED" = "n" ] && [ "$PORT" != "80" ] && [ "$PORT" != "443" ]; then
+                warning "Looking for alternative port for custom port deployment..."
+                NEW_PORT=$(find_available_port "$PORT")
+                if [ $? -eq 0 ] && [ "$NEW_PORT" != "$PORT" ]; then
+                    warning "Port $PORT is in use, switching to port $NEW_PORT"
+                    PORT="$NEW_PORT"
+                    
+                    # Update nginx configuration with new port
+                    log "📝 Updating Nginx configuration with new port $PORT..."
+                    recreate_nginx_config
+                fi
+            fi
+        else
+            # Different error, show details
+            run_remote "systemctl status nginx" "Showing Nginx status" || true
+            run_remote "journalctl -u nginx --no-pager -n 10" "Showing Nginx logs" || true
+        fi
+        
+        ((attempt++))
+        if [ $attempt -le $max_attempts ]; then
+            log "⏳ Waiting 3 seconds before retry..."
+            sleep 3
+        fi
+    done
+    
+    error "Failed to start Nginx after $max_attempts attempts"
+    return 1
+}
+
+# Function to recreate nginx configuration (used when port changes)
+recreate_nginx_config() {
+    log "🔄 Recreating Nginx configuration with updated settings..."
+    
+    # Create new nginx config with updated port
+    if [ "$SSL_ENABLED" = "n" ]; then
+        # HTTP Only Configuration with updated port
+        cat > /tmp/nginx_config_updated << EOF
+# HTTP server for $SERVICE_NAME on port $PORT
+server {
+    listen $PORT;
+    server_name $DOMAIN;
+    
+    # Document root for $SERVICE_NAME
+    root $REMOTE_DIR;
+    index index.html;
+    
+    # Main location block for serving static files
+    location / {
+        try_files \$uri \$uri/ =404;
+        
+        # Add CORS headers for API requests
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
+        add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
+        add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+    }
+    
+    # Handle OPTIONS requests for CORS preflight
+    location ~* ^.+\.(OPTIONS)$ {
+        add_header 'Access-Control-Allow-Origin' '*';
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE';
+        add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization';
+        add_header 'Content-Type' 'text/plain; charset=utf-8';
+        add_header 'Content-Length' 0;
+        return 204;
+    }
+    
+    # Handle static assets with caching
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files \$uri =404;
+        
+        # CORS headers for static assets too
+        add_header 'Access-Control-Allow-Origin' '*';
+    }
+    
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
+    add_header Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: http: data:; img-src 'self' data: https: http:;" always;
+    
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_proxied expired no-cache no-store private must-revalidate auth;
+    gzip_types
+        text/plain
+        text/css
+        text/xml
+        text/javascript
+        application/x-javascript
+        application/xml+rss
+        application/javascript
+        application/json
+        application/xml
+        text/html;
+    
+    # Access and error logs for $SERVICE_NAME
+    access_log /var/log/nginx/${SERVICE_NAME}_access.log;
+    error_log /var/log/nginx/${SERVICE_NAME}_error.log;
+}
+EOF
+        
+        # Upload updated config
+        copy_to_vps "/tmp/nginx_config_updated" "$NGINX_SITE_CONFIG" "Updated Nginx configuration upload"
+        rm -f /tmp/nginx_config_updated
+        
+        # Update firewall for new port
+        log "🔥 Updating firewall for new port $PORT..."
+        run_remote "ufw allow $PORT/tcp" "Allowing new port $PORT" || true
+        
+        log "✅ Nginx configuration updated for port $PORT"
+    fi
+}
+
 # Check if Nginx is installed on VPS
 log "🌐 Checking if Nginx is installed on VPS..."
 if ! run_remote "which nginx" "Nginx installation check"; then
@@ -330,17 +508,28 @@ fi
 
 log "✅ Nginx is installed on VPS"
 
-# Check if Nginx is running
+# Check if Nginx is running and start with smart port handling
 log "🔍 Checking if Nginx is running..."
 if ! run_remote "systemctl is-active --quiet nginx" "Nginx status check"; then
-    warning "Nginx is not running. Starting Nginx..."
-    if ! run_remote "systemctl start nginx && systemctl enable nginx" "Starting Nginx"; then
-        error "Failed to start Nginx"
+    warning "Nginx is not running. Starting Nginx with smart port conflict resolution..."
+    
+    # Enable Nginx to start on boot
+    run_remote "systemctl enable nginx" "Enabling Nginx service" || true
+    
+    # Use smart port handling function
+    if ! start_nginx_with_port_handling; then
+        error "Failed to start Nginx even after conflict resolution attempts"
+        warning "Manual intervention may be required. Please check:"
+        warning "  1. What services are using ports: netstat -tlnp | grep ':80\\|:443'"
+        warning "  2. Nginx error logs: journalctl -u nginx"
+        warning "  3. System resources: df -h && free -h"
         exit 1
     fi
+else
+    log "✅ Nginx is already running"
 fi
 
-log "✅ Nginx is running"
+log "✅ Nginx is running and ready"
 
 echo ""
 log "📦 Step 1: Preparing VPS environment for service '$SERVICE_NAME'..."
@@ -628,6 +817,7 @@ if run_remote "which ufw" "Checking UFW installation" 2>/dev/null; then
             log "✅ Firewall configured to allow port $PORT"
         else
             warning "Failed to configure firewall - you may need to manually open port $PORT"
+            info "💡 You can manually allow the port with: ufw allow $PORT/tcp"
         fi
     fi
 else
@@ -678,6 +868,11 @@ fi
 
 echo ""
 log "🧪 Step $([ "$SSL_ENABLED" = "y" ] && echo "7" || echo "6"): Testing deployment..."
+
+# Update user about any port changes
+if [ "$SSL_ENABLED" = "n" ]; then
+    info "🔗 Your dashboard will be accessible at: $TEST_URL$TEST_PORT"
+fi
 
 # Wait a moment for Nginx to fully reload
 sleep 3

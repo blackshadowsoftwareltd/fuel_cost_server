@@ -140,10 +140,11 @@ validate_port() {
 
 validate_domain() {
     local domain="$1"
-    if [[ $domain =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]\.[a-zA-Z]{2,}$ ]] || [[ $domain =~ ^[a-zA-Z0-9.-]+$ ]]; then
+    # Allow domains with underscores, multiple subdomains, and various formats
+    if [[ $domain =~ ^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*\.[a-zA-Z]{2,}$ ]] || [[ $domain =~ ^[a-zA-Z0-9_.-]+$ ]]; then
         return 0
     else
-        error "Invalid domain format: $domain (expected: example.com or subdomain.example.com)"
+        error "Invalid domain format: $domain (expected: example.com, subdomain.example.com, or sub_domain.example.com)"
         return 1
     fi
 }

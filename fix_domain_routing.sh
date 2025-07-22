@@ -134,19 +134,27 @@ EOF
     SERVER_EXEC="python3 /usr/local/bin/${SERVICE_NAME}_server.py"
 fi
 
-# Create systemd service
+# Create systemd service with proper variable handling
+if which node >/dev/null 2>&1; then
+    ACTUAL_SERVER_EXEC="node /usr/local/bin/${SERVICE_NAME}_server.js"
+else
+    ACTUAL_SERVER_EXEC="python3 /usr/local/bin/${SERVICE_NAME}_server.py"
+fi
+
 cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
-Description=$SERVICE_NAME Dashboard Service
+Description=${SERVICE_NAME} Dashboard Service
 After=network.target
 
 [Service]
 Type=simple
 User=www-data
 WorkingDirectory=$REMOTE_DIR
-ExecStart=$SERVER_EXEC
+ExecStart=\$ACTUAL_SERVER_EXEC
 Restart=always
 RestartSec=5
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
@@ -222,14 +230,22 @@ ssh $VPS_USER@$VPS_IP << ENDSSH
 # Start the dashboard service
 systemctl start ${SERVICE_NAME}.service
 
-sleep 3
+sleep 5
 
-# Check if service is running
+# Check if service is running with detailed diagnostics
+echo "📊 Service Status:"
+systemctl status ${SERVICE_NAME}.service --no-pager -l
+
+echo ""
 if systemctl is-active --quiet ${SERVICE_NAME}.service; then
     echo "✅ Dashboard service is running"
 else
     echo "❌ Dashboard service failed to start"
-    systemctl status ${SERVICE_NAME}.service
+    echo "🔍 Service logs:"
+    journalctl -u ${SERVICE_NAME}.service --no-pager -n 10
+    echo "🔍 Checking file permissions:"
+    ls -la $REMOTE_DIR/
+    ls -la /usr/local/bin/${SERVICE_NAME}_server.*
     exit 1
 fi
 

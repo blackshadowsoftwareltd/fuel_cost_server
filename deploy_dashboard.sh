@@ -659,44 +659,174 @@ if [ "$USE_REVERSE_PROXY" = "y" ]; then
     echo ""
     log "🔧 Step 2b: Setting up static file server for reverse proxy..."
     
-    # Create a simple Python HTTP server service
-    cat > /tmp/simple_server.py << EOF
+    # Try to use Node.js first, then fall back to Python
+    if run_remote "which node" "Checking Node.js availability" 2>/dev/null; then
+        log "✅ Using Node.js for static file server"
+        
+        # Create Node.js static server
+        cat > /tmp/static_server.js << EOF
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+
+const PORT = $PROXY_TARGET_PORT;
+const DIRECTORY = '$REMOTE_DIR';
+
+const mimeTypes = {
+    '.html': 'text/html',
+    '.css': 'text/css',
+    '.js': 'application/javascript',
+    '.json': 'application/json',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.ttf': 'font/ttf',
+    '.eot': 'application/vnd.ms-fontobject'
+};
+
+const server = http.createServer((req, res) => {
+    // Add CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, DNT, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Range');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range');
+    
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+    }
+    
+    let filePath = path.join(DIRECTORY, req.url === '/' ? 'index.html' : req.url);
+    
+    fs.readFile(filePath, (err, data) => {
+        if (err) {
+            console.error('File not found:', filePath);
+            res.writeHead(404, { 'Content-Type': 'text/plain' });
+            res.end('File not found');
+            return;
+        }
+        
+        const ext = path.extname(filePath);
+        const contentType = mimeTypes[ext] || 'text/plain';
+        
+        res.writeHead(200, { 'Content-Type': contentType });
+        res.end(data);
+    });
+});
+
+server.listen(PORT, '127.0.0.1', () => {
+    console.log(\`Static server running at http://127.0.0.1:\${PORT}\`);
+    console.log(\`Serving directory: \${DIRECTORY}\`);
+});
+
+server.on('error', (err) => {
+    console.error('Server error:', err);
+    process.exit(1);
+});
+EOF
+        
+        SERVER_FILE="/usr/local/bin/${SERVICE_NAME}_server.js"
+        SERVER_EXEC="/usr/bin/node"
+        
+    else
+        log "✅ Using Python for static file server"
+        
+        # Create improved Python HTTP server
+        cat > /tmp/static_server.py << EOF
 #!/usr/bin/env python3
 import http.server
 import socketserver
 import os
 import sys
+from urllib.parse import unquote
+import mimetypes
 
 PORT = $PROXY_TARGET_PORT
 DIRECTORY = "$REMOTE_DIR"
 
-class Handler(http.server.SimpleHTTPRequestHandler):
+class CORSHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DIRECTORY, **kwargs)
     
     def end_headers(self):
-        # Add CORS headers
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, DNT, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Range')
+        self.send_header('Access-Control-Expose-Headers', 'Content-Length, Content-Range')
         super().end_headers()
+    
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.end_headers()
+    
+    def log_message(self, format, *args):
+        print(f"{self.address_string()} - {format%args}")
+
+def main():
+    try:
+        # Ensure directory exists and is accessible
+        if not os.path.exists(DIRECTORY):
+            print(f"Error: Directory {DIRECTORY} does not exist")
+            sys.exit(1)
+            
+        if not os.access(DIRECTORY, os.R_OK):
+            print(f"Error: Cannot read directory {DIRECTORY}")
+            sys.exit(1)
+        
+        # Change to the directory
+        os.chdir(DIRECTORY)
+        print(f"Serving directory: {DIRECTORY}")
+        print(f"Files in directory: {os.listdir('.')}")
+        
+        # Start server
+        with socketserver.TCPServer(("127.0.0.1", PORT), CORSHTTPRequestHandler) as httpd:
+            print(f"Static server running at http://127.0.0.1:{PORT}")
+            httpd.serve_forever()
+            
+    except PermissionError as e:
+        print(f"Permission error: {e}")
+        print("Try running with different user or check file permissions")
+        sys.exit(1)
+    except OSError as e:
+        print(f"OS error: {e}")
+        if "Address already in use" in str(e):
+            print(f"Port {PORT} is already in use")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    os.chdir(DIRECTORY)
-    with socketserver.TCPServer(("127.0.0.1", PORT), Handler) as httpd:
-        print(f"Serving {DIRECTORY} at http://127.0.0.1:{PORT}")
-        httpd.serve_forever()
+    main()
 EOF
-    
-    # Upload the server script
-    if ! copy_to_vps "/tmp/simple_server.py" "/usr/local/bin/${SERVICE_NAME}_server.py" "Static file server upload"; then
-        error "Failed to upload static file server"
-        exit 1
+        
+        SERVER_FILE="/usr/local/bin/${SERVICE_NAME}_server.py"
+        SERVER_EXEC="/usr/bin/python3"
     fi
-    rm -f /tmp/simple_server.py
+    
+    # Upload the appropriate server script
+    if [ "$SERVER_EXEC" = "/usr/bin/node" ]; then
+        if ! copy_to_vps "/tmp/static_server.js" "$SERVER_FILE" "Node.js static file server upload"; then
+            error "Failed to upload Node.js static file server"
+            exit 1
+        fi
+        rm -f /tmp/static_server.js
+    else
+        if ! copy_to_vps "/tmp/static_server.py" "$SERVER_FILE" "Python static file server upload"; then
+            error "Failed to upload Python static file server"
+            exit 1
+        fi
+        rm -f /tmp/static_server.py
+    fi
     
     # Make it executable
-    run_remote "chmod +x /usr/local/bin/${SERVICE_NAME}_server.py" "Making server executable" || true
+    run_remote "chmod +x $SERVER_FILE" "Making server executable" || true
     
     # Create systemd service for the static server
     cat > /tmp/static_server.service << EOF
@@ -708,9 +838,11 @@ After=network.target
 Type=simple
 User=www-data
 WorkingDirectory=$REMOTE_DIR
-ExecStart=/usr/bin/python3 /usr/local/bin/${SERVICE_NAME}_server.py
+ExecStart=$SERVER_EXEC $SERVER_FILE
 Restart=always
 RestartSec=5
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
@@ -723,17 +855,52 @@ EOF
     fi
     rm -f /tmp/static_server.service
     
+    # Ensure proper permissions for www-data user
+    run_remote "chown -R www-data:www-data $REMOTE_DIR" "Setting file ownership for www-data"
+    run_remote "chmod -R 755 $REMOTE_DIR" "Setting directory permissions"
+    run_remote "chmod 644 $REMOTE_DIR/index.html" "Setting HTML file permissions"
+    
     # Enable and start the service
     run_remote "systemctl daemon-reload" "Reloading systemd"
     run_remote "systemctl enable ${SERVICE_NAME}.service" "Enabling static server service"
+    
+    # Stop service first if it exists (in case of re-deployment)
+    run_remote "systemctl stop ${SERVICE_NAME}.service" "Stopping existing service" || true
+    
+    # Start the service
     run_remote "systemctl start ${SERVICE_NAME}.service" "Starting static server service"
     
-    # Check if service is running
+    # Wait for service to start
+    sleep 5
+    
+    # Check if service is running with detailed status
     if run_remote "systemctl is-active --quiet ${SERVICE_NAME}.service" "Checking service status"; then
         log "✅ Static file server started successfully on port $PROXY_TARGET_PORT"
+        
+        # Test the service endpoint
+        if run_remote "curl -s --connect-timeout 5 http://localhost:$PROXY_TARGET_PORT/ | head -n 1 | grep -q html" "Testing static server response"; then
+            log "✅ Static server is responding with HTML content"
+        else
+            warning "⚠️ Static server started but may not be serving content correctly"
+        fi
     else
-        warning "⚠️ Static file server may have issues. Checking status..."
-        run_remote "systemctl status ${SERVICE_NAME}.service" "Showing service status" || true
+        error "❌ Static file server failed to start"
+        warning "📋 Checking service logs and status..."
+        run_remote "systemctl status ${SERVICE_NAME}.service --no-pager -l" "Showing detailed service status" || true
+        run_remote "journalctl -u ${SERVICE_NAME}.service --no-pager -n 20" "Showing service logs" || true
+        
+        # Try manual test
+        warning "🔧 Attempting manual server test..."
+        if [ "$SERVER_EXEC" = "/usr/bin/node" ]; then
+            run_remote "node $SERVER_FILE &" "Testing Node.js server manually" || true
+        else
+            run_remote "python3 $SERVER_FILE &" "Testing Python server manually" || true
+        fi
+        sleep 3
+        run_remote "curl -I http://localhost:$PROXY_TARGET_PORT/" "Testing manual server" || true
+        run_remote "pkill -f ${SERVICE_NAME}_server" "Stopping manual test server" || true
+        
+        exit 1
     fi
 fi
 

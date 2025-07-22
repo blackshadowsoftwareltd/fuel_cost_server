@@ -12,3 +12,4 @@ fuel_cost.db
 .DS_Store
 Thumbs.db
 fuel_cost.db
+*.log

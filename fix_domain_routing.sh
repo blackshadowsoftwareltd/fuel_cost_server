@@ -57,11 +57,17 @@ chown -R www-data:www-data $REMOTE_DIR
 
 # Find available port starting from 8890
 echo "🔍 Finding available port..."
-DASHBOARD_PORT=$DASHBOARD_PORT
-while netstat -ln | grep -q ":$DASHBOARD_PORT "; do
-    echo "⚠️ Port $DASHBOARD_PORT is busy, trying next port..."
-    DASHBOARD_PORT=$((DASHBOARD_PORT + 1))
+CURRENT_PORT=$DASHBOARD_PORT
+while netstat -ln | grep -q ":$CURRENT_PORT "; do
+    echo "⚠️ Port $CURRENT_PORT is busy, trying next port..."
+    CURRENT_PORT=$((CURRENT_PORT + 1))
+    # Safety check
+    if [ $CURRENT_PORT -gt $((DASHBOARD_PORT + 50)) ]; then
+        echo "❌ Could not find available port after checking 50 ports"
+        exit 1
+    fi
 done
+DASHBOARD_PORT=$CURRENT_PORT
 echo "✅ Using port: $DASHBOARD_PORT"
 
 # Stop any existing service first
@@ -76,7 +82,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = \$DASHBOARD_PORT;
+const PORT = $DASHBOARD_PORT;
 const DIRECTORY = '$REMOTE_DIR';
 
 const server = http.createServer((req, res) => {
@@ -125,7 +131,7 @@ import http.server
 import socketserver
 import os
 
-PORT = \$DASHBOARD_PORT
+PORT = $DASHBOARD_PORT
 DIRECTORY = "$REMOTE_DIR"
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -199,7 +205,7 @@ server {
     
     # Proxy all requests to the dashboard service
     location / {
-        proxy_pass http://127.0.0.1:\$DASHBOARD_PORT;
+        proxy_pass http://127.0.0.1:$DASHBOARD_PORT;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -270,7 +276,7 @@ echo "🧪 Step 6: Testing the complete setup..."
 ssh $VPS_USER@$VPS_IP << ENDSSH
 
 echo "Testing dashboard service directly..."
-DIRECT_STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:\$DASHBOARD_PORT/ || echo 'FAILED')
+DIRECT_STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:$DASHBOARD_PORT/ || echo 'FAILED')
 echo "Direct service test: \$DIRECT_STATUS"
 
 echo "Testing through Nginx reverse proxy..."
@@ -290,7 +296,7 @@ echo ""
 echo "🎉 Setup complete!"
 echo ""
 echo "📋 Summary:"
-echo "  • Dashboard service running on: http://127.0.0.1:\$DASHBOARD_PORT"
+echo "  • Dashboard service running on: http://127.0.0.1:$DASHBOARD_PORT"
 echo "  • Nginx reverse proxy configured for: $DOMAIN"
 echo "  • Your existing Rust service should still work on its domain"
 echo ""
